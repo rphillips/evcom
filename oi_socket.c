@@ -1,16 +1,18 @@
 #include "oi.h"
+#include "oi_socket.h"
 #include <ev.h>
 
 static void 
 close_socket(oi_socket *socket)
 {
 #ifdef HAVE_GNUTLS
-  if(socket->server->secure)
-    ev_io_stop(socket->server->loop, &socket->handshake_watcher);
+  if(socket->secure)
+    ev_io_stop(socket->loop, &socket->handshake_watcher);
 #endif
-  ev_io_stop(socket->server->loop, &socket->read_watcher);
-  ev_io_stop(socket->server->loop, &socket->write_watcher);
-  ev_timer_stop(socket->server->loop, &socket->timeout_watcher);
+  ev_io_stop(socket->loop, &socket->error_watcher);
+  ev_io_stop(socket->loop, &socket->read_watcher);
+  ev_io_stop(socket->loop, &socket->write_watcher);
+  ev_timer_stop(socket->loop, &socket->timeout_watcher);
 
   if(0 > close(socket->fd))
     error("problem closing socket fd");
@@ -258,6 +260,7 @@ oi_socket_init(oi_socket *socket, float timeout)
 {
   socket->fd = -1;
   socket->server = NULL;
+  socket->loop = NULL;
   socket->ip = NULL;
   socket->open = FALSE;
 
@@ -299,13 +302,13 @@ void
 oi_socket_close (oi_socket *socket)
 {
 #ifdef HAVE_GNUTLS
-  if(socket->server->secure) {
+  if(socket->secure) {
     ev_io_set(&socket->goodbye_tls_watcher, socket->fd, EV_ERROR | EV_READ | EV_WRITE);
-    ev_io_start(socket->server->loop, &socket->goodbye_tls_watcher);
+    ev_io_start(socket->loop, &socket->goodbye_tls_watcher);
     return;
   }
 #endif
-  ev_timer_start(socket->server->loop, &socket->goodbye_watcher);
+  ev_timer_start(socket->loop, &socket->goodbye_watcher);
 }
 
 /* 
@@ -314,7 +317,7 @@ oi_socket_close (oi_socket *socket)
 void 
 oi_socket_reset_timeout(oi_socket *socket)
 {
-  ev_timer_again(socket->server->loop, &socket->timeout_watcher);
+  ev_timer_again(socket->loop, &socket->timeout_watcher);
 }
 
 /**
@@ -325,16 +328,71 @@ oi_socket_reset_timeout(oi_socket *socket)
  * while the socket is writing another buffer the oi_socket_write
  * will return FALSE and ignore the request.
  */
-int 
-oi_socket_write (oi_socket *socket, const char *buf, size_t len, oi_after_write_cb cb)
+void 
+oi_socket_write(oi_socket *socket, oi_buf *buf);
 {
-  if(ev_is_active(&socket->write_watcher))
-    return FALSE;
-  assert(!CONNECTION_HAS_SOMETHING_TO_WRITE);
-  socket->to_write = buf;
-  socket->to_write_len = len;
-  socket->written = 0;
-  socket->after_write_cb = cb;
-  ev_io_start(socket->server->loop, &socket->write_watcher);
+  oi_buf *n;
+  for(n = socket->write_buffer; n->next; n = n->next) {;} /* TODO O(N) should be O(C) */
+  n->next = buf;
+
+  buf->written = 0;
+  buf->next = NULL;
+  if(socket->write_buffer == buf) 
+    ev_io_start(socket->loop, &socket->write_watcher);
   return TRUE;
+}
+
+void
+oi_socket_attach(oi_socket *socket, struct ev_loop *loop)
+{
+  socket->loop = loop;
+  ev_timer_start(loop, &socket->timeout_watcher);
+
+#ifdef HAVE_GNUTLS
+  if(server->secure) {
+    ev_io_start(loop, &socket->handshake_watcher);
+    return;
+  }
+#endif
+
+  ev_io_start(loop, &socket->read_watcher);
+}
+
+void
+oi_socket_init_peer(oi_socket *socket, oi_server *server, 
+    int fd, struct sockaddr_in *addr, socklen_t addr_len)
+{
+  socket->fd = fd;
+  socket->open = TRUE;
+  socket->server = server;
+  socket->secure = server->secure;
+  memcpy(&socket->sockaddr, &addr, addr_len);
+  if(server->port[0] != '\0')
+    socket->ip = inet_ntoa(socket->sockaddr.sin_addr);  
+
+#ifdef SO_NOSIGPIPE
+  int arg = 1;
+  setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &arg, sizeof(int));
+#endif
+
+#ifdef HAVE_GNUTLS
+  if(socket->secure) {
+    gnutls_init(&socket->session, GNUTLS_SERVER);
+    gnutls_transport_set_lowat(socket->session, 0); 
+    gnutls_set_default_priority(socket->session);
+    gnutls_credentials_set(socket->session, GNUTLS_CRD_CERTIFICATE, socket->server->credentials);
+
+    gnutls_transport_set_ptr(socket->session, (gnutls_transport_ptr) fd); 
+    gnutls_transport_set_push_function(socket->session, nosigpipe_push);
+
+    oi_ssl_cache_init(&server->ssl_cache, socket->session);
+  }
+
+  ev_io_set(&socket->handshake_watcher, fd, EV_READ | EV_WRITE | EV_ERROR);
+#endif /* HAVE_GNUTLS */
+
+  /* Note: not starting the write watcher until there is data to be written */
+  ev_io_set(&socket->write_watcher, fd, EV_WRITE);
+  ev_io_set(&socket->read_watcher, fd, EV_READ);
+  ev_io_set(&socket->error_watcher, fd, EV_ERROR);
 }

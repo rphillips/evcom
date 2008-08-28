@@ -1,5 +1,9 @@
 #include <ev.h>
 
+#ifdef HAVE_GNUTLS
+# include "oi_ssl_cache.h"
+#endif
+
 #define OI_MAX_CONNECTIONS 1024
 #define oi_error(FORMAT, ...) fprintf(stderr, "error: " FORMAT "\n", ##__VA_ARGS__)
 #ifndef TRUE
@@ -33,30 +37,34 @@ struct oi_server {
   struct sockaddr_in sockaddr;                  /* ro */
   socklen_t socklen;                            /* ro */
   char port[6];                                 /* ro */
+  char *socketfile;                             /* ro */
   struct ev_loop *loop;                         /* ro */
   unsigned listening:1;                         /* ro */
   unsigned secure:1;                            /* ro */
   ev_io connection_watcher;                     /* private */
+  ev_io error_watcher;                          /* private */
 #ifdef HAVE_GNUTLS
   gnutls_certificate_credentials_t credentials; /* private */
-  struct rbtree_t session_cache;                /* private */
+  oi_ssl_cache ssl_cache;                       /* private */
 #endif
 
   /* public */
-  oi_socket* (*on_connection)(oi_server *server);
+  oi_socket* (*on_connection)(oi_server *server, struct sockaddr_in *, socklen_t);
+  void       (*on_error)     (oi_server *server);
   void *data;
 };
 
 void oi_server_init(oi_server *server, ev_loop *loop);
-void oi_server_set_secure(oi_server *server, const char *cert_file, const char *key_file);
+int oi_server_set_secure(oi_server *server, const char *cert_file, const char *key_file, gnutls_x509_crt_fmt_t type);
 int oi_server_listen_on_port(oi_server *server, int port);
-//int oi_server_listen_on_socketfile(oi_server *server, char *filename);
+int oi_server_listen_on_socketfile(oi_server *server, char *filename);
 void oi_server_unlisten(oi_server *server); 
 
 struct oi_socket {
   int fd;                      /* ro */
   struct sockaddr_in sockaddr; /* ro */
   socklen_t socklen;           /* ro */ 
+  struct ev_loop *loop;        /* ro */
   oi_server *server;           /* ro */
   char *ip;                    /* ro */
   unsigned open:1;             /* ro */
@@ -88,26 +96,24 @@ struct oi_socket {
 };
 
 void oi_socket_init(oi_socket *socket, float timeout);
-//void oi_socket_tcp_connect(oi_socket *socket, blah blah blah); /* i don't want to do non-blcking dns resolve */
-//void oi_socket_unix_connect(oi_socket *socket, char *filename);
-void oi_socket_attach(oi_socket *socket, ev_loop *loop);
+//void oi_socket_open_tcp(oi_socket *socket, blah blah blah); /* i don't want to do non-blcking dns resolve */
+//void oi_socket_open_socketfile(oi_socket *socket, char *filename);
+void oi_socket_attach(oi_socket *socket, struct ev_loop *loop);
 
 void oi_socket_stop_reading(oi_socket *socket); /* by default on_read will always read! */
 void oi_socket_resume_reading(oi_socket *socket); /* sockets otherwise are always reading */
 void oi_socket_reset_timeout(oi_socket *socket);
-void oi_socket_close(oi_socket *socket); /* also disables on_read - on_closure callback made later*/
+void oi_socket_close(oi_socket *socket); /* also disables on_read - on_close callback made later*/
 void oi_socket_write(oi_socket *socket, oi_buf *);
-void oi_socket_write_file(oi_socket *socket, oi_file *); /* fast kernel operation.  
-                                                          * socket.on_drain will be
-                                                          * called normally when it 
-                                                          * is complete. file.on_ready 
-                                                          * will be called too */
+/* fast kernel operation.  socket.on_drain will be called normally when it
+ * is complete. */
+void oi_socket_write_file(oi_socket *socket, oi_file *); 
 
 struct oi_file {
   oi_buf *write_buffer;
 
   /* public */
-  void (*on_ready)   (oi_file *file, long pos); /* called when it's first opened */
+  void (*on_opened)  (oi_file *file, long pos);
   void (*on_read)    (oi_file *file, long pos, const void *buf, size_t count);
   void (*on_drain)   (oi_file *file, long pos); /* called when the write buffer becomes empty */
   void (*on_error)   (oi_file *file, long pos);
@@ -115,7 +121,8 @@ struct oi_file {
   void *data;
 };
 
-void oi_file_open(oi_file*, char *filename, char *mode);
+void oi_file_init(oi_file*);
+void oi_file_open(char *filename, char *mode);
 /* although many file operations will be done in a thread pool, they will
  * always return to the event loop to give the callbacks.
  * on some systems, file i/o might be able to take advantage of select()
