@@ -3,11 +3,15 @@
  *   gnutls_db_set_ptr, gnutls_db_set_store_function
  *   gnutls_db_set_retrieve_function, gnutls_db_set_remove_function
  */
+#include <string.h> /* memcmp, memcpy */
 #include <gnutls/gnutls.h>
 #include "oi_ssl_cache.h" 
 #include "rbtree.h"
 #define OI_MAX_SESSION_KEY 32
 #define OI_MAX_SESSION_VALUE 512
+#ifndef MIN
+# define MIN(a,b) (a < b ? a : b)
+#endif
 
 struct cache_node {
   struct rbtree_node_t node;
@@ -108,7 +112,7 @@ cache_remove (void *data, gnutls_datum_t key)
 
 void oi_ssl_cache_init(oi_ssl_cache *cache)
 {
-  rbtree_init(cache, session_cache_compare);
+  rbtree_init(cache, cache_compare);
 }
 
 void oi_ssl_cache_session(oi_ssl_cache *cache, gnutls_session_t session)

@@ -6,6 +6,7 @@ include config.mk
 DEP = oi.h             oi_socket.h
 SRC =      oi_server.c oi_socket.c
 ifeq ($(GNUTLSFLAGS),)
+else
 	SRC += rbtree.c oi_ssl_cache.c
 	DEP += rbtree.h oi_ssl_cache.h
 endif
@@ -53,11 +54,17 @@ test_rbtree: test_rbtree.o $(OUTPUT_A)
 	@echo BUILDING test_rbtree
 	@$(CC) $(CFLAGS) -o $@ $< $(OUTPUT_A)
 
+examples: examples/echo
+
+examples/echo: examples/echo.c $(OUTPUT_A) 
+	@echo BUILDING examples/echo
+	$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
 
 clean:
 	@echo CLEANING
 	@rm -f ${OBJ} $(OUTPUT_A) $(OUTPUT_LIB) $(NAME)-${VERSION}.tar.gz 
 	@rm -f test_rbtree  
+	@rm -f examples/echo  
 
 clobber: clean
 	@echo CLOBBERING
@@ -89,4 +96,4 @@ uninstall:
 upload_website:
 	scp -r doc/index.html doc/icon.png rydahl@tinyclouds.org:~/web/public/liboi
 
-.PHONY: all options clean clobber dist install uninstall test upload_website
+.PHONY: all options clean clobber dist install uninstall test upload_website examples

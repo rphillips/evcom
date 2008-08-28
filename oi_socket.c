@@ -109,7 +109,7 @@ on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
 
   assert(watcher == &socket->timeout_watcher);
 
-  //printf("on_timeout\n");
+  printf("on_timeout\n");
 
   if(socket->on_timeout) {
     socket->on_timeout(socket);
@@ -132,8 +132,9 @@ on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
 
   printf("on_readable\n");
 
-  assert(ev_is_active(&socket->timeout_watcher)); // TODO -- why is this broken?
+  //assert(ev_is_active(&socket->timeout_watcher)); // TODO -- why is this broken?
   assert(watcher == &socket->read_watcher);
+  assert(revents == EV_READ);
 
 #ifdef HAVE_GNUTLS
   assert(!ev_is_active(&socket->handshake_watcher));
@@ -155,7 +156,7 @@ on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
 
     recved = recv(socket->fd, recv_buffer, recv_buffer_size, 0);
     if(recved < 0) goto error;
-    if(recved == 0) return;
+    if(recved == 0) goto error; /* XXX is this correct ? */
 
 #ifdef HAVE_GNUTLS
   }
@@ -177,6 +178,7 @@ on_error(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   oi_socket *socket = watcher->data;
   assert(watcher == &socket->write_watcher);
+  assert(revents == EV_ERROR);
 
   oi_error("error on socket");
   if(socket->on_error) {
@@ -198,8 +200,9 @@ on_writable(struct ev_loop *loop, ev_io *watcher, int revents)
 
   oi_buf *to_write = socket->write_buffer;
 
+  assert(revents == EV_WRITE);
   assert(to_write != NULL);
-  assert(ev_is_active(&socket->timeout_watcher)); // TODO -- why is this broken?
+//  assert(ev_is_active(&socket->timeout_watcher)); // TODO -- why is this broken?
   assert(watcher == &socket->write_watcher);
 
 #ifdef HAVE_GNUTLS
@@ -347,15 +350,20 @@ oi_socket_init(oi_socket *socket, float timeout)
 void 
 oi_socket_close (oi_socket *socket)
 {
+  ev_io_stop(socket->loop, &socket->read_watcher);
+  ev_io_stop(socket->loop, &socket->write_watcher);
+  ev_io_stop(socket->loop, &socket->error_watcher);
+  ev_timer_stop(socket->loop, &socket->timeout_watcher);
   /* If using SSL attempt to close the socket properly
    * this may require exchanging more data.
    */
 #ifdef HAVE_GNUTLS
   if(socket->secure) {
+    ev_io_stop(socket->loop, &socket->handshake_watcher);
     ev_io_set(&socket->goodbye_tls_watcher, socket->fd, EV_ERROR | EV_READ | EV_WRITE);
     ev_io_start(socket->loop, &socket->goodbye_tls_watcher);
     return;
-  } else 
+  }  
 #endif
   ev_timer_start(socket->loop, &socket->goodbye_watcher);
 }
@@ -381,8 +389,15 @@ void
 oi_socket_write(oi_socket *socket, oi_buf *buf)
 {
   oi_buf *n;
-  for(n = socket->write_buffer; n->next; n = n->next) {;} /* TODO O(N) should be O(C) */
-  n->next = buf;
+
+  /* ugly */
+  if(socket->write_buffer == NULL) {
+    socket->write_buffer = buf;
+  } else {
+    for(n = socket->write_buffer; n->next; n = n->next) {;} /* TODO O(N) should be O(C) */
+    n->next = buf;
+  }
+
 
   buf->written = 0;
   buf->next = NULL;
