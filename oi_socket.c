@@ -1,6 +1,37 @@
+#include <stdio.h>
+#include <assert.h>
+#include <unistd.h> /* close() */
+#include <fcntl.h>  /* fcntl() */
+#include <netinet/tcp.h> /* TCP_NODELAY */
+#include <errno.h> /* for the default methods */
+#include <string.h> /* memset */
+#include <netinet/in.h>  /* inet_ntoa */
+#include <arpa/inet.h>   /* inet_ntoa */
+
+#include <ev.h>
+
 #include "oi.h"
 #include "oi_socket.h"
-#include <ev.h>
+
+#ifdef HAVE_GNUTLS
+# include <gnutls/gnutls.h>
+# include "oi_ssl_cache.h"
+
+# define GNUTLS_NEED_WRITE (gnutls_record_get_direction(socket->session) == 1)
+# define GNUTLS_NEED_READ (gnutls_record_get_direction(socket->session) == 0)
+#endif
+
+
+static ssize_t 
+nosigpipe_push(void *data, const void *buf, size_t len)
+{
+  int fd = (int)data;
+  int flags = 0;
+#ifdef MSG_NOSIGNAL
+  flags = MSG_NOSIGNAL;
+#endif
+  return send(fd, buf, len, flags);
+}
 
 static void 
 close_socket(oi_socket *socket)
@@ -15,7 +46,7 @@ close_socket(oi_socket *socket)
   ev_timer_stop(socket->loop, &socket->timeout_watcher);
 
   if(0 > close(socket->fd))
-    error("problem closing socket fd");
+    oi_error("problem closing socket fd");
 
   socket->open = FALSE;
 
@@ -39,7 +70,7 @@ on_handshake(struct ev_loop *loop, ev_io *watcher, int revents)
   assert(!ev_is_active(&socket->write_watcher));
 
   if(EV_ERROR & revents) {
-    error("on_handshake() got error event, closing socket.n");
+    oi_error("on_handshake() got error event, closing socket.n");
     goto error;
   }
 
@@ -58,7 +89,7 @@ on_handshake(struct ev_loop *loop, ev_io *watcher, int revents)
   ev_io_stop(loop, watcher);
 
   ev_io_start(loop, &socket->read_watcher);
-  if(CONNECTION_HAS_SOMETHING_TO_WRITE)
+  if(socket->write_buffer != NULL)
     ev_io_start(loop, &socket->write_watcher);
 
   return;
@@ -141,6 +172,19 @@ error:
   oi_socket_close(socket);
 }
 
+static void 
+on_error(struct ev_loop *loop, ev_io *watcher, int revents)
+{
+  oi_socket *socket = watcher->data;
+  assert(watcher == &socket->write_watcher);
+
+  oi_error("error on socket");
+  if(socket->on_error) {
+    socket->on_error(socket);
+  }
+  close_socket(socket);
+}
+
 /* Internal callback 
  * called by socket->write_watcher
  */
@@ -152,10 +196,10 @@ on_writable(struct ev_loop *loop, ev_io *watcher, int revents)
   
   printf("on_writable\n");
 
-  assert(CONNECTION_HAS_SOMETHING_TO_WRITE);
-  assert(socket->written <= socket->to_write_len);
-  // TODO -- why is this broken?
-  //assert(ev_is_active(&socket->timeout_watcher));
+  oi_buf *to_write = socket->write_buffer;
+
+  assert(to_write != NULL);
+  assert(ev_is_active(&socket->timeout_watcher)); // TODO -- why is this broken?
   assert(watcher == &socket->write_watcher);
 
 #ifdef HAVE_GNUTLS
@@ -163,8 +207,8 @@ on_writable(struct ev_loop *loop, ev_io *watcher, int revents)
 
   if(socket->secure) {
     sent = gnutls_record_send( socket->session
-                             , socket->write_buffer->base + socket->write_buffer->written
-                             , socket->write_buffer->len - socket->write_buffer->written
+                             , to_write->base + to_write->written
+                             , to_write->len - to_write->written
                              ); 
     if(sent <= 0) {
       if(gnutls_error_is_fatal(sent)) goto error;
@@ -178,8 +222,8 @@ on_writable(struct ev_loop *loop, ev_io *watcher, int revents)
 
     /* TODO use writev() here */
     sent = nosigpipe_push( (void*)socket->fd
-                         , socket->write_buffer->base + socket->write_buffer->written
-                         , socket->write_buffer->len - socket->write_buffer->written
+                         , to_write->base + to_write->written
+                         , to_write->len - to_write->written
                          );
     if(sent < 0) goto error;
     if(sent == 0) return;
@@ -190,21 +234,23 @@ on_writable(struct ev_loop *loop, ev_io *watcher, int revents)
 
   oi_socket_reset_timeout(socket);
 
-  socket->write_buffer->written += sent;
+  to_write->written += sent;
   socket->written += sent;
 
-  if(socket->write_buffer->written == socket->write_buffer->len) {
-    if(socket->write_buffer->release)
-      socket->write_buffer->release(socket->write_buffer);
-    socket->write_buffer = socket->write_buffer->next;
+  if(to_write->written == to_write->len) {
+    if(to_write->release)
+      to_write->release(to_write);
+    socket->write_buffer = to_write->next;
     if(socket->write_buffer == NULL) {
       ev_io_stop(loop, watcher);
+      if(socket->on_drain)
+        socket->on_drain(socket);
     }
   }
   return;
 error:
-  error("close socket on write.");
-  oi_socket_schedule_close(socket);
+  oi_error("close socket on write.");
+  oi_socket_close(socket);
 }
 
 #ifdef HAVE_GNUTLS
@@ -215,7 +261,7 @@ on_goodbye_tls(struct ev_loop *loop, ev_io *watcher, int revents)
   assert(watcher == &socket->goodbye_tls_watcher);
 
   if(EV_ERROR & revents) {
-    error("on_goodbye() got error event, closing socket.");
+    oi_error("on_goodbye() got error event, closing socket.");
     goto die;
   }
 
@@ -301,12 +347,15 @@ oi_socket_init(oi_socket *socket, float timeout)
 void 
 oi_socket_close (oi_socket *socket)
 {
+  /* If using SSL attempt to close the socket properly
+   * this may require exchanging more data.
+   */
 #ifdef HAVE_GNUTLS
   if(socket->secure) {
     ev_io_set(&socket->goodbye_tls_watcher, socket->fd, EV_ERROR | EV_READ | EV_WRITE);
     ev_io_start(socket->loop, &socket->goodbye_tls_watcher);
     return;
-  }
+  } else 
 #endif
   ev_timer_start(socket->loop, &socket->goodbye_watcher);
 }
@@ -329,7 +378,7 @@ oi_socket_reset_timeout(oi_socket *socket)
  * will return FALSE and ignore the request.
  */
 void 
-oi_socket_write(oi_socket *socket, oi_buf *buf);
+oi_socket_write(oi_socket *socket, oi_buf *buf)
 {
   oi_buf *n;
   for(n = socket->write_buffer; n->next; n = n->next) {;} /* TODO O(N) should be O(C) */
@@ -337,9 +386,9 @@ oi_socket_write(oi_socket *socket, oi_buf *buf);
 
   buf->written = 0;
   buf->next = NULL;
-  if(socket->write_buffer == buf) 
+  /* TODO if handshaking do not start write_watcher */
+  if(socket->write_buffer == buf)
     ev_io_start(socket->loop, &socket->write_watcher);
-  return TRUE;
 }
 
 void
@@ -347,14 +396,13 @@ oi_socket_attach(oi_socket *socket, struct ev_loop *loop)
 {
   socket->loop = loop;
   ev_timer_start(loop, &socket->timeout_watcher);
-
+  ev_io_start(loop, &socket->error_watcher);
 #ifdef HAVE_GNUTLS
-  if(server->secure) {
+  if(socket->secure) {
     ev_io_start(loop, &socket->handshake_watcher);
     return;
   }
 #endif
-
   ev_io_start(loop, &socket->read_watcher);
 }
 
@@ -362,6 +410,12 @@ void
 oi_socket_init_peer(oi_socket *socket, oi_server *server, 
     int fd, struct sockaddr_in *addr, socklen_t addr_len)
 {
+  int flags = fcntl(fd, F_GETFL, 0);
+  int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+  if(r < 0) {
+    oi_error("error setting peer socket non-blocking");
+  }
+
   socket->fd = fd;
   socket->open = TRUE;
   socket->server = server;
@@ -385,13 +439,12 @@ oi_socket_init_peer(oi_socket *socket, oi_server *server,
     gnutls_transport_set_ptr(socket->session, (gnutls_transport_ptr) fd); 
     gnutls_transport_set_push_function(socket->session, nosigpipe_push);
 
-    oi_ssl_cache_init(&server->ssl_cache, socket->session);
+    oi_ssl_cache_session(&server->ssl_cache, socket->session);
   }
 
   ev_io_set(&socket->handshake_watcher, fd, EV_READ | EV_WRITE | EV_ERROR);
 #endif /* HAVE_GNUTLS */
 
-  /* Note: not starting the write watcher until there is data to be written */
   ev_io_set(&socket->write_watcher, fd, EV_WRITE);
   ev_io_set(&socket->read_watcher, fd, EV_READ);
   ev_io_set(&socket->error_watcher, fd, EV_ERROR);

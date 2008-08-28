@@ -1,3 +1,10 @@
+#ifndef oi_h
+#define oi_h
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
 #include <ev.h>
 
 #ifdef HAVE_GNUTLS
@@ -54,7 +61,7 @@ struct oi_server {
   void *data;
 };
 
-void oi_server_init(oi_server *server, ev_loop *loop);
+void oi_server_init(oi_server *server, struct ev_loop *loop);
 int oi_server_set_secure(oi_server *server, const char *cert_file, const char *key_file, gnutls_x509_crt_fmt_t type);
 int oi_server_listen_on_port(oi_server *server, int port);
 int oi_server_listen_on_socketfile(oi_server *server, char *filename);
@@ -90,7 +97,7 @@ struct oi_socket {
   void (*on_read)    (oi_socket *socket, const void *buf, size_t count);
   void (*on_drain)   (oi_socket *socket); /* called when the write buffer becomes empty */
   void (*on_error)   (oi_socket *socket);
-  void (*on_closure) (oi_socket *socket);
+  void (*on_close)   (oi_socket *socket);
   void (*on_timeout) (oi_socket *socket);
   void *data;
 };
@@ -127,7 +134,7 @@ void oi_file_open(char *filename, char *mode);
  * always return to the event loop to give the callbacks.
  * on some systems, file i/o might be able to take advantage of select()
  * and friends (like on FreeBSD where sendfile() is non-blocking).  */
-void oi_file_attach(oi_file*, ev_loop *loop);
+void oi_file_attach(oi_file*, struct ev_loop *loop);
 
 
 void oi_file_rewind(oi_file*);
@@ -138,4 +145,4 @@ void oi_file_read(oi_file*, size_t count);
 void oi_file_write(oi_file*, oi_buf *);
 void oi_file_close(oi_file*);
 
-
+#endif /* oi_h */

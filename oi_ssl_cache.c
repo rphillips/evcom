@@ -3,7 +3,9 @@
  *   gnutls_db_set_ptr, gnutls_db_set_store_function
  *   gnutls_db_set_retrieve_function, gnutls_db_set_remove_function
  */
+#include <gnutls/gnutls.h>
 #include "oi_ssl_cache.h" 
+#include "rbtree.h"
 #define OI_MAX_SESSION_KEY 32
 #define OI_MAX_SESSION_VALUE 512
 
@@ -104,7 +106,12 @@ cache_remove (void *data, gnutls_datum_t key)
   return 0;
 }
 
-void oi_ssl_cache_init(oi_ssl_cache *cache, gnutls_session_t session)
+void oi_ssl_cache_init(oi_ssl_cache *cache)
+{
+  rbtree_init(cache, session_cache_compare);
+}
+
+void oi_ssl_cache_session(oi_ssl_cache *cache, gnutls_session_t session)
 {
   gnutls_db_set_ptr (session, cache);
   gnutls_db_set_store_function (session, cache_store);

@@ -1,16 +1,17 @@
+#include <stdio.h>
+#include <assert.h>
+#include <unistd.h> /* close() */
+#include <fcntl.h>  /* fcntl() */
+#include <netinet/tcp.h> /* TCP_NODELAY */
+#include <errno.h> /* for the default methods */
+#include <string.h> /* memset */
+
 #include "oi.h"
 #include "oi_socket.h"
 #ifdef HAVE_GNUTLS
+# include "oi_ssl_cache.h"
 # include <gnutls/gnutls.h>
 #endif
-
-static void 
-set_nonblock (int fd)
-{
-  int flags = fcntl(fd, F_GETFL, 0);
-  int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-  assert(0 <= r && "Setting socket non-block failed!");
-}
 
 /* Internal callback 
  * Called by server->connection_watcher.
@@ -41,17 +42,16 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
   }
 
   oi_socket *socket = NULL;
-  if(server->new_connection)
-    socket = server->new_connection(server, &addr, addr_len);
+  if(server->on_connection)
+    socket = server->on_connection(server, &addr, addr_len);
 
   if(socket == NULL) {
-    error("problem getting peer socket");
+    oi_error("problem getting peer socket");
     close(fd);
     return;
   } 
   
-  set_nonblock(fd);
-  oi_socket_init_peer(socket, server, fd, addr, addr_len);
+  oi_socket_init_peer(socket, server, fd, &addr, addr_len);
   oi_socket_attach(socket, loop);
 }
 
@@ -65,7 +65,12 @@ listen_on_fd(oi_server *server, const int fd)
     return -1;
   }
   
-  set_nonblock(fd); /* XXX superfluous? */
+
+  int flags = fcntl(fd, F_GETFL, 0);
+  int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+  if(r < 0) {
+    oi_error("error setting server socket non-blocking");
+  }
   
   server->fd = fd;
   server->listening = TRUE;
@@ -118,7 +123,7 @@ oi_server_listen_on_port(oi_server *server, const int port)
     goto error;
   }
   
-  int ret = oi_server_listen_on_fd(server, fd);
+  int ret = listen_on_fd(server, fd);
   if (ret >= 0) {
     sprintf(server->port, "%d", port);
   }
@@ -193,11 +198,12 @@ oi_server_init(oi_server *server, struct ev_loop *loop)
   server->secure = FALSE;
 
 #ifdef HAVE_GNUTLS
-  rbtree_init(&server->session_cache, session_cache_compare);
+  oi_ssl_cache_init(&server->ssl_cache);
   server->credentials = NULL;
 #endif
 
-  server->new_connection = NULL;
+  server->on_connection = NULL;
+  server->on_error = NULL;
   server->data = NULL;
 }
 
