@@ -29,7 +29,7 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
   
   if(EV_ERROR & revents) {
     oi_error("on_connection() got error event, closing server.");
-    oi_server_unlisten(server);
+    oi_server_close(server);
     return;
   }
   
@@ -138,7 +138,7 @@ error:
  * existing connections.
  */
 void 
-oi_server_unlisten(oi_server *server)
+oi_server_close(oi_server *server)
 {
   if(server->listening) {
     ev_io_stop(server->loop, &server->connection_watcher);

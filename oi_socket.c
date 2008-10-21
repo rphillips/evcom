@@ -116,7 +116,7 @@ on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
     oi_socket_reset_timeout(socket);
   }
 
-  oi_socket_close(socket);
+  oi_socket_schedule_close(socket);
 }
 
 /* Internal callback 
@@ -170,7 +170,7 @@ on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
 
   return;
 error:
-  oi_socket_close(socket);
+  oi_socket_schedule_close(socket);
 }
 
 static void 
@@ -253,7 +253,7 @@ on_writable(struct ev_loop *loop, ev_io *watcher, int revents)
   return;
 error:
   oi_error("close socket on write.");
-  oi_socket_close(socket);
+  oi_socket_schedule_close(socket);
 }
 
 #ifdef HAVE_GNUTLS
@@ -348,7 +348,7 @@ oi_socket_init(oi_socket *socket, float timeout)
 }
 
 void 
-oi_socket_close (oi_socket *socket)
+oi_socket_schedule_close (oi_socket *socket)
 {
   ev_io_stop(socket->loop, &socket->read_watcher);
   ev_io_stop(socket->loop, &socket->write_watcher);
