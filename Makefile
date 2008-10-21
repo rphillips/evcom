@@ -3,8 +3,8 @@
 
 include config.mk
 
-DEP = oi.h             oi_socket.h
-SRC =      oi_server.c oi_socket.c
+DEP = oi.h
+SRC = oi.c
 ifeq ($(GNUTLSFLAGS),)
 else
 	SRC += rbtree.c oi_ssl_cache.c
