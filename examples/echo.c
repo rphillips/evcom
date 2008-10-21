@@ -55,7 +55,7 @@ main()
   server.on_connection = on_connection;
 
   printf("echo listening on port 5000\n");
-  oi_server_listen_on_port(&server, 5000);
+  oi_server_listen_tcp(&server, 5000);
   ev_loop(loop, 0);
 
   return 0;
