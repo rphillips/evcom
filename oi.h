@@ -11,8 +11,6 @@
 # include "oi_ssl_cache.h"
 #endif
 
-#define OI_MAX_CONNECTIONS 1024
-
 /* socket state */
 #define OI_CLOSED    0x01
 #define OI_OPENING   0x02
@@ -23,28 +21,31 @@ typedef struct oi_buf    oi_buf;
 typedef struct oi_server oi_server;
 typedef struct oi_socket oi_socket;
 
-void oi_server_init           (oi_server *, struct ev_loop *loop);
+void oi_server_init           (oi_server *, int max_connections);
  int oi_server_listen_tcp     (oi_server *, int port);
  int oi_server_listen_unix    (oi_server *, char *filename);
 void oi_server_attach         (oi_server *, struct ev_loop *loop);
 void oi_server_detach         (oi_server *);
- int oi_server_set_secure     (oi_server *, const char *cert_file, const char *key_file, gnutls_x509_crt_fmt_t type);
 void oi_server_close          (oi_server *); 
+#ifdef HAVE_GNUTLS
+ int oi_server_set_secure     (oi_server *, const char *cert_file, const char *key_file, gnutls_x509_crt_fmt_t type);
+#endif 
 
 void oi_socket_init           (oi_socket *, float timeout);
 void oi_socket_open_tcp       (oi_socket *, char *host, int port); 
 void oi_socket_open_unix      (oi_socket *, char *socketfile);
 void oi_socket_attach         (oi_socket *, struct ev_loop *loop);
 void oi_socket_detach         (oi_socket *);
-void oi_socket_read_stop      (oi_socket *); /* by default on_read will always read! */
-void oi_socket_read_start     (oi_socket *); /* sockets otherwise are always reading */
+void oi_socket_read_stop      (oi_socket *);
+void oi_socket_read_start     (oi_socket *);
 void oi_socket_reset_timeout  (oi_socket *);
-void oi_socket_schedule_close (oi_socket *); /* also disables on_read - on_close callback made later*/
+void oi_socket_schedule_close (oi_socket *);
 void oi_socket_write          (oi_socket *, oi_buf *);
 
 struct oi_server {
 /* read only */
   int fd;
+  int max_connections;
   struct sockaddr_in sockaddr;
   socklen_t socklen;
   char port[6];

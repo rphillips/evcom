@@ -51,11 +51,12 @@ main()
   struct ev_loop *loop = ev_default_loop(0);
   oi_server server;
 
-  oi_server_init(&server, loop);
+  oi_server_init(&server, 10);
   server.on_connection = on_connection;
 
   printf("echo listening on port 5000\n");
   oi_server_listen_tcp(&server, 5000);
+  oi_server_attach(&server, loop);
   ev_loop(loop, 0);
 
   return 0;

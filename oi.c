@@ -135,7 +135,7 @@ listen_on_fd(oi_server *server, const int fd)
 {
   assert(server->listening == FALSE);
 
-  if (listen(fd, OI_MAX_CONNECTIONS) < 0) {
+  if (listen(fd, server->max_connections) < 0) {
     perror("listen()");
     return -1;
   }
@@ -151,7 +151,6 @@ listen_on_fd(oi_server *server, const int fd)
   server->listening = TRUE;
   
   ev_io_set (&server->connection_watcher, server->fd, EV_READ | EV_ERROR);
-  ev_io_start (server->loop, &server->connection_watcher);
   
   return server->fd;
 }
@@ -216,7 +215,7 @@ void
 oi_server_close(oi_server *server)
 {
   if(server->listening) {
-    ev_io_stop(server->loop, &server->connection_watcher);
+    oi_server_detach(server);
     close(server->fd);
     server->port[0] = '\0';
     server->listening = FALSE;
@@ -261,10 +260,24 @@ oi_server_set_secure (server, cert_file, key_file, type)
 }
 #endif /* HAVE_GNUTLS */
 
-void 
-oi_server_init(oi_server *server, struct ev_loop *loop)
+void
+oi_server_attach (oi_server *server, struct ev_loop *loop)
 {
+  ev_io_start (loop, &server->connection_watcher);
   server->loop = loop;
+}
+
+void
+oi_server_detach (oi_server *server)
+{
+  ev_io_stop (server->loop, &server->connection_watcher);
+  server->loop = NULL;
+}
+
+void 
+oi_server_init(oi_server *server, int max_connections)
+{
+  server->max_connections = max_connections;
   server->listening = FALSE;
   server->port[0] = '\0';
   server->fd = -1;
@@ -637,10 +650,14 @@ oi_socket_init(oi_socket *socket, float timeout)
 void 
 oi_socket_schedule_close (oi_socket *socket)
 {
-  /* If using SSL attempt to close the socket properly this may require
-   * exchanging more data. 
-   */
   socket->state = OI_CLOSING;
+  /* cannot simply call close_socket() here because that would 
+   * invoke the socket->on_close() which may free the socket.
+   * instead we must return the event loop and close on the 
+   * next cycle. If the socket is secure, we have to do the
+   * goodbye exchange.
+   */
+  ev_feed_event(socket->loop, &socket->write_watcher, EV_WRITE);
 }
 
 /* 
