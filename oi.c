@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <unistd.h> /* close() */
 #include <fcntl.h>  /* fcntl() */
@@ -60,7 +61,7 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   oi_server *server = watcher->data;
 
-  printf("on connection!\n");
+  //printf("on connection!\n");
 
   assert(server->listening);
   assert(server->loop == loop);
@@ -106,8 +107,6 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
   socket->server = server;
   socket->secure = server->secure;
   memcpy(&socket->sockaddr, &addr, addr_len);
-  if(server->port[0] != '\0')
-    socket->ip = inet_ntoa(socket->sockaddr.sin_addr);  
 
 #ifdef HAVE_GNUTLS
   if(socket->secure) {
@@ -159,9 +158,11 @@ listen_on_fd(oi_server *server, const int fd)
 /**
  * Begin the server listening on a file descriptor This DOES NOT start the
  * event loop. Start the event loop after making this call.
+ *
+ * FIXME For now only listening on any address. the host arg is ignored.
  */
 int 
-oi_server_listen_tcp(oi_server *server, const int port)
+oi_server_listen_tcp(oi_server *server, const char *host, int port)
 {
   int fd = -1;
   struct linger ling = {0, 0};
@@ -206,6 +207,13 @@ error:
   if(fd > 0) close(fd);
   return -1;
 }
+
+int
+oi_server_listen_unix (oi_server *server, const char *filename)
+{
+  /* TODO */
+}
+
 
 /**
  * Stops the server. Will not accept new connections.  Does not drop
@@ -436,8 +444,12 @@ secure_handshake(oi_socket *socket)
       close_socket(socket);
     return;
   }
-  socket->state = OI_OPENED;
   oi_socket_reset_timeout(socket);
+
+  socket->state = OI_OPENED;
+  if(socket->on_connect)
+    socket->on_connect(socket);
+
   if(socket->write_buffer != NULL)
     ev_io_start(socket->loop, &socket->write_watcher);
 }
@@ -475,7 +487,7 @@ socket_send(oi_socket *socket)
   }
 
   assert(socket->secure == FALSE);
-  assert(socket->state == OI_OPENED);
+  assert(socket->state == OI_OPENED || socket->state == OI_OPENING);
 
   /* TODO use writev() here */
   sent = nosigpipe_push( (void*)socket->fd /* yes, funky. XXX */
@@ -496,27 +508,35 @@ socket_send(oi_socket *socket)
 static void
 socket_recv(oi_socket *socket)
 {
-  char recv_buffer[TCP_MAXWIN];
-  size_t recv_buffer_size = TCP_MAXWIN;
+  char buf[TCP_MAXWIN];
+  size_t buf_size = TCP_MAXWIN;
   ssize_t recved;
 
   assert(socket->secure == FALSE);
-  assert(socket->state == OI_OPENED);
+  assert(socket->state == OI_OPENED || socket->state == OI_OPENING);
 
-  recved = recv(socket->fd, recv_buffer, recv_buffer_size, 0);
+  recved = recv(socket->fd, buf, buf_size, 0);
 
-  if(recved < 0) goto error;
-  if(recved == 0) goto error; /* XXX is this correct ? */
+  if(recved < 0) {
+    switch(errno) {
+      case EAGAIN: return;
+      default:
+        perror("recv()");
+        oi_socket_schedule_close(socket);
+        return;
+    }
+  }
+  if(recved == 0)  {
+    /* XXX is this correct ? */
+    oi_socket_schedule_close(socket);
+    return;
+  }
 
   oi_socket_reset_timeout(socket);
 
   if(socket->on_read) {
-    socket->on_read(socket, recv_buffer, recved);
+    socket->on_read(socket, buf, recved);
   }
-
-  return;
-error:
-  oi_socket_schedule_close(socket);
 }
 
 /* Internal callback. called by socket->read_watcher */
@@ -525,7 +545,7 @@ on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   oi_socket *socket = watcher->data;
 
-  printf("on_readable\n");
+  //printf("on_readable\n");
 
   //assert(ev_is_active(&socket->timeout_watcher)); // TODO -- why is this broken?
   assert(watcher == &socket->read_watcher);
@@ -549,6 +569,8 @@ on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
     switch(socket->state) {
     case OI_OPENING: 
       socket->state = OI_OPENED;
+      if(socket->on_connect)
+        socket->on_connect(socket);
     case OI_OPENED:    
       socket_recv(socket);
       break;
@@ -567,7 +589,7 @@ on_writable(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   oi_socket *socket = watcher->data;
   
-  printf("on_writable\n");
+  //printf("on_writable\n");
 
   assert(revents == EV_WRITE);
 //  assert(ev_is_active(&socket->timeout_watcher)); // TODO -- why is this broken?
@@ -591,6 +613,8 @@ on_writable(struct ev_loop *loop, ev_io *watcher, int revents)
     switch(socket->state) {
     case OI_OPENING: 
       socket->state = OI_OPENED;
+      if(socket->on_connect)
+        socket->on_connect(socket);
     case OI_OPENED:    
       socket_send(socket);
       break;
@@ -618,7 +642,6 @@ oi_socket_init(oi_socket *socket, float timeout)
   socket->fd = -1;
   socket->server = NULL;
   socket->loop = NULL;
-  socket->ip = NULL;
   socket->write_buffer = NULL;
   socket->state = OI_CLOSED;
   socket->secure = FALSE;
@@ -639,12 +662,11 @@ oi_socket_init(oi_socket *socket, float timeout)
   ev_timer_init(&socket->timeout_watcher, on_timeout, timeout, 0.);
   socket->timeout_watcher.data = socket;  
 
-  socket->on_connected = NULL;
+  socket->on_connect = NULL;
   socket->on_read = NULL;
   socket->on_drain = NULL;
   socket->on_error = NULL;
   socket->on_timeout = NULL;
-  socket->data = NULL;
 }
 
 void 
@@ -670,12 +692,12 @@ oi_socket_reset_timeout(oi_socket *socket)
 }
 
 /**
- * Writes a string to the socket. This is actually sets a watcher
- * which may take multiple iterations to write the entire string.
+ * Writes a string to the socket. This is actually sets a watcher which may
+ * take multiple iterations to write the entire string.
  *
- * This can only be called once at a time. If you call it again
- * while the socket is writing another buffer the oi_socket_write
- * will return FALSE and ignore the request.
+ * This can only be called once at a time. If you call it again while the
+ * socket is writing another buffer the oi_socket_write will return FALSE
+ * and ignore the request.
  */
 void 
 oi_socket_write(oi_socket *socket, oi_buf *buf)
@@ -686,16 +708,25 @@ oi_socket_write(oi_socket *socket, oi_buf *buf)
   if(socket->write_buffer == NULL) {
     socket->write_buffer = buf;
   } else {
-    for(n = socket->write_buffer; n->next; n = n->next) {;} /* TODO O(N) should be O(C) */
+    for(n = socket->write_buffer; n->next; n = n->next) {;} /* TODO O(N) should be O(1) */
     n->next = buf;
   }
 
-
   buf->written = 0;
   buf->next = NULL;
-  /* TODO if handshaking do not start write_watcher */
-  if(socket->write_buffer == buf)
+  if(socket->state == OI_OPENED)
     ev_io_start(socket->loop, &socket->write_watcher);
+}
+
+void
+oi_socket_write_simple(oi_socket *socket, const char *str, size_t len)
+{
+  oi_buf *buf = malloc(sizeof(oi_buf));
+  buf->release = (void (*)(oi_buf*))free;
+  buf->base = strdup(str);
+  buf->len = len;
+
+  oi_socket_write(socket, buf);
 }
 
 void
@@ -717,5 +748,71 @@ oi_socket_detach(oi_socket *socket)
   ev_io_stop(socket->loop, &socket->error_watcher);
   ev_timer_stop(socket->loop, &socket->timeout_watcher);
   socket->loop = NULL;
+}
+
+void
+oi_socket_read_stop (oi_socket *socket)
+{
+  ev_io_stop(socket->loop, &socket->read_watcher);
+}
+
+void
+oi_socket_read_start (oi_socket *socket)
+{
+  ev_io_start(socket->loop, &socket->read_watcher);
+}
+
+/* for now host is only allowed to be an IP address */
+int
+oi_socket_open_tcp (oi_socket *s, const char *host, int port)
+{
+  int fd;
+  struct sockaddr_in dest_addr;
+
+  if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    perror("socket()");
+    return -1;
+  }
+
+  int flags = fcntl(fd, F_GETFL, 0);
+  int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+  if(r < 0) {
+    oi_error("error setting peer socket non-blocking");
+    return r;
+  }
+
+#ifdef SO_NOSIGPIPE
+  flags = 1;
+  setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &flags, sizeof(flags));
+#endif
+  
+  memset(&dest_addr, 0, sizeof(dest_addr));
+  dest_addr.sin_family = AF_INET;
+  dest_addr.sin_port = htons(port);
+  dest_addr.sin_addr.s_addr = inet_addr(host);
+  memset(dest_addr.sin_zero, '\0', sizeof dest_addr.sin_zero);
+
+  r = connect(fd, (struct sockaddr*)&dest_addr, sizeof dest_addr);
+  if(r < 0 && errno != EINPROGRESS) {
+    perror("connect");
+    close(fd);
+    return fd;
+  }
+
+  s->fd = fd;
+  s->state = OI_OPENING;
+  s->secure = FALSE;
+
+  ev_io_set (&s->read_watcher, fd, EV_READ);
+  ev_io_set (&s->write_watcher, fd, EV_WRITE);
+  ev_io_set (&s->error_watcher, fd, EV_ERROR);
+
+  return fd;
+}
+
+int
+oi_socket_open_unix (oi_socket *socket, const char *socketfile)
+{
+  /* TODO */
 }
 

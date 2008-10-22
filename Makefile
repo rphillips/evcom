@@ -47,12 +47,17 @@ $(OUTPUT_A): $(OBJ)
 
 ${OBJ}: ${DEP}
 
-test: test_rbtree
+test: test_rbtree test/echo
 	./test_rbtree
+	./test/echo
 
 test_rbtree: test_rbtree.o $(OUTPUT_A)
 	@echo BUILDING test_rbtree
 	@$(CC) $(CFLAGS) -o $@ $< $(OUTPUT_A)
+
+test/echo: test/echo.c $(OUTPUT_A)
+	@echo BUILDING test/echo
+	$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
 
 examples: examples/echo
 

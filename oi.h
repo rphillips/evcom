@@ -22,8 +22,8 @@ typedef struct oi_server oi_server;
 typedef struct oi_socket oi_socket;
 
 void oi_server_init           (oi_server *, int max_connections);
- int oi_server_listen_tcp     (oi_server *, int port);
- int oi_server_listen_unix    (oi_server *, char *filename);
+ int oi_server_listen_tcp     (oi_server *, const char *host, int port);
+ int oi_server_listen_unix    (oi_server *, const char *filename);
 void oi_server_attach         (oi_server *, struct ev_loop *loop);
 void oi_server_detach         (oi_server *);
 void oi_server_close          (oi_server *); 
@@ -32,8 +32,8 @@ void oi_server_close          (oi_server *);
 #endif 
 
 void oi_socket_init           (oi_socket *, float timeout);
-void oi_socket_open_tcp       (oi_socket *, char *host, int port); 
-void oi_socket_open_unix      (oi_socket *, char *socketfile);
+ int oi_socket_open_tcp       (oi_socket *, const char *host, int port); 
+ int oi_socket_open_unix      (oi_socket *, const char *socketfile);
 void oi_socket_attach         (oi_socket *, struct ev_loop *loop);
 void oi_socket_detach         (oi_socket *);
 void oi_socket_read_stop      (oi_socket *);
@@ -41,6 +41,7 @@ void oi_socket_read_start     (oi_socket *);
 void oi_socket_reset_timeout  (oi_socket *);
 void oi_socket_schedule_close (oi_socket *);
 void oi_socket_write          (oi_socket *, oi_buf *);
+void oi_socket_write_simple   (oi_socket *, const char *str, size_t len);
 
 struct oi_server {
 /* read only */
@@ -62,7 +63,7 @@ struct oi_server {
   oi_ssl_cache ssl_cache;
 #endif
 
-  /* public */
+/* public */
   oi_socket* (*on_connection) (oi_server *, struct sockaddr_in *, socklen_t);
   void       (*on_error)      (oi_server *);
   void *data;
@@ -71,15 +72,14 @@ struct oi_server {
 struct oi_socket {
 /* read only */
   int fd;
+  int state;
+  unsigned secure:1;
   struct sockaddr_in sockaddr;
   socklen_t socklen;
   struct ev_loop *loop;
   oi_server *server;
-  char *ip;
-  unsigned secure:1;
   oi_buf *write_buffer;
   size_t written;
-  int state;
 
 /* private */  
   ev_io error_watcher;
@@ -91,7 +91,7 @@ struct oi_socket {
 #endif
   
 /* public */
-  void (*on_connected) (oi_socket *);
+  void (*on_connect)   (oi_socket *);
   void (*on_read)      (oi_socket *, const void *buf, size_t count);
   void (*on_drain)     (oi_socket *);
   void (*on_error)     (oi_socket *);
