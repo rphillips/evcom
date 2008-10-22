@@ -10,6 +10,8 @@
 #define PING "PING"
 #define PONG "PONG"
 
+int successful_ping_count; 
+
 static void 
 on_server_read(oi_socket *socket, const void *base, size_t len)
 {
@@ -19,7 +21,7 @@ on_server_read(oi_socket *socket, const void *base, size_t len)
   char buf[200000];
   strncpy(buf, base, len);
   buf[len] = 0;
-  printf("server got message: %s\n", buf);
+  //printf("server got message: %s\n", buf);
 
   oi_socket_write_simple(socket, PONG, sizeof PONG);
 }
@@ -28,25 +30,28 @@ static void
 on_error(oi_socket *socket)
 {
   printf("an error happend on the peer socket\n");
+  exit(1);
 }
 
 static void 
 on_client_error(oi_socket *socket)
 {
   printf("an error happend on the client socket\n");
+  exit(1);
 }
 
 static void 
 on_close(oi_socket *socket)
 {
-  printf("server connection closed\n");
+  //printf("server connection closed\n");
   free(socket);
 }
 
 static void 
 on_client_close(oi_socket *socket)
 {
-  printf("client connection closed\n");
+  //printf("client connection closed\n");
+  ev_unloop(socket->loop, EVUNLOOP_ALL);
 }
 
 static oi_socket* 
@@ -58,7 +63,7 @@ on_server_connection(oi_server *server, struct sockaddr_in *addr, socklen_t len)
   socket->on_error = on_error;
   socket->on_close = on_close;
 
-  printf("on server connection\n");
+  //printf("on server connection\n");
 
   return socket;
 }
@@ -66,7 +71,7 @@ on_server_connection(oi_server *server, struct sockaddr_in *addr, socklen_t len)
 static void 
 on_client_connect(oi_socket *socket)
 {
-  printf("client connected. sending ping\n");
+  //printf("client connected. sending ping\n");
   oi_socket_write_simple(socket, PING, sizeof PING);
 }
 
@@ -76,9 +81,18 @@ on_client_read(oi_socket *socket, const void *base, size_t len)
   char buf[200000];
   strncpy(buf, base, len);
   buf[len] = 0;
-  printf("client got message: %s\n", buf);
+  //printf("client got message: %s\n", buf);
+  
+  if(strcmp(buf, PONG) == 0) {
 
-  oi_socket_write_simple(socket, PING, sizeof PING);
+    if(++successful_ping_count > 10) {
+      oi_socket_schedule_close(socket);
+      return;
+    } 
+    oi_socket_write_simple(socket, PING, sizeof PING);
+  } else {
+    exit(1);
+  }
 }
 
 int 
@@ -95,7 +109,7 @@ main()
   r = oi_server_listen_tcp(&server, "127.0.0.1", 5000);
   assert(r > 0 && "problem listening");
   oi_server_attach(&server, loop);
-  printf("starting server on port 5000\n");
+  //printf("starting server on port 5000\n");
 
   oi_socket_init(&client, 3.0);
   client.on_read    = on_client_read;
@@ -106,7 +120,7 @@ main()
   r = oi_socket_open_tcp(&client, "127.0.0.1", 5000);
   assert(r > 0 && "problem connecting");
   oi_socket_attach(&client, loop);
-  printf("connecting client to port 5000\n");
+  //printf("connecting client to port 5000\n");
 
   ev_loop(loop, 0);
 
