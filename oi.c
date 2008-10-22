@@ -41,6 +41,7 @@
 
 #endif
 
+#define is_inet_address(address) (address.in.sun_family == AF_INET)
 
 static ssize_t 
 nosigpipe_push(void *data, const void *buf, size_t len)
@@ -73,9 +74,10 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
     return;
   }
   
-  struct sockaddr_in addr; // connector's address information
-  socklen_t addr_len = sizeof(addr); 
-  int fd = accept(server->fd, (struct sockaddr*) & addr, & addr_len);
+  union oi_address address; /* connector's address information */
+  socklen_t addr_len = sizeof(address);
+  
+  int fd = accept(server->fd, (struct sockaddr*) &address, &addr_len);
   if(fd < 0) {
     perror("accept()");
     return;
@@ -83,7 +85,7 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
 
   oi_socket *socket = NULL;
   if(server->on_connection)
-    socket = server->on_connection(server, &addr, addr_len);
+    socket = server->on_connection(server, (struct sockaddr*)&address, addr_len);
 
   if(socket == NULL) {
     oi_error("problem getting peer socket");
@@ -106,7 +108,7 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
   socket->state = OI_OPENING;
   socket->server = server;
   socket->secure = server->secure;
-  memcpy(&socket->sockaddr, &addr, addr_len);
+  memcpy(&socket->remote_address, &address, addr_len);
 
 #ifdef HAVE_GNUTLS
   if(socket->secure) {
@@ -166,8 +168,8 @@ oi_server_listen_tcp(oi_server *server, const char *host, int port)
 {
   int fd = -1;
   struct linger ling = {0, 0};
-  struct sockaddr_in addr;
   int flags = 1;
+  int r;
   
   if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
     perror("socket()");
@@ -187,31 +189,87 @@ oi_server_listen_tcp(oi_server *server, const char *host, int port)
   /* the memset call clears nonstandard fields in some impementations that
    * otherwise mess things up.
    */
-  memset(&addr, 0, sizeof(addr));
+  memset(&server->address, 0, sizeof(union oi_address));
   
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons(port);
-  addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  
-  if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+  server->address.in.sin_family = AF_INET;
+  server->address.in.sin_port = htons(port);
+  server->address.in.sin_addr.s_addr = htonl(INADDR_ANY);
+
+  r = bind( fd
+          , (struct sockaddr *)&server->address
+          , sizeof(server->address.in)
+          );
+  if (r < 0) {
     perror("bind()");
     goto error;
   }
   
   int ret = listen_on_fd(server, fd);
-  if (ret >= 0) {
-    sprintf(server->port, "%d", port);
-  }
   return ret;
 error:
   if(fd > 0) close(fd);
   return -1;
 }
 
+/* access mask = 0700 */
 int
-oi_server_listen_unix (oi_server *server, const char *filename)
+oi_server_listen_unix (oi_server *server, const char *socketfile, int access_mask)
 {
-  /* TODO */
+  int fd = -1;
+  struct linger ling = {0, 0};
+  int flags = 1;
+  int r;
+  struct stat tstat;
+  int old_umask;
+  
+  if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+    perror("socket()");
+    return -1;
+  }
+  
+  flags = 1;
+  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *)&flags, sizeof(flags));
+  setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&flags, sizeof(flags));
+  setsockopt(fd, SOL_SOCKET, SO_LINGER, (void *)&ling, sizeof(ling));
+
+  /* the memset call clears nonstandard fields in some impementations that
+   * otherwise mess things up.
+   */
+  memset(&server->address, 0, sizeof(union oi_address));
+  
+  /* FIXME 
+   * current: delete the socket if it exists already 
+   * want: return -1 if file exists or not writable. let the app decide this
+   * one
+   * also: FIXME BLOCKING
+   */ 
+  if (lstat(socketfile, &tstat) == 0) {
+    if (S_ISSOCK(tstat.st_mode))
+      unlink(socketfile);
+  }
+  
+  server->address.un.sun_family = AF_UNIX;
+  strcpy(server->address.un.sun_path, socketfile);
+
+  old_umask=umask( ~(access_mask&0777)); /* FIXME BLOCKING */
+
+  r = bind( fd
+          , (struct sockaddr *)&server->address
+          , sizeof(server->address.un)
+          );
+
+  umask(old_umask); /* FIXME BLOCKING */
+
+  if (r < 0) {
+    perror("bind()");
+    goto error;
+  }
+  
+  int ret = listen_on_fd(server, fd);
+  return ret;
+error:
+  if(fd > 0) close(fd);
+  return -1;
 }
 
 
@@ -225,7 +283,6 @@ oi_server_close(oi_server *server)
   if(server->listening) {
     oi_server_detach(server);
     close(server->fd);
-    server->port[0] = '\0';
     server->listening = FALSE;
   }
 }
@@ -287,11 +344,12 @@ oi_server_init(oi_server *server, int max_connections)
 {
   server->max_connections = max_connections;
   server->listening = FALSE;
-  server->port[0] = '\0';
   server->fd = -1;
   server->connection_watcher.data = server;
   ev_init (&server->connection_watcher, on_connection);
   server->secure = FALSE;
+
+  memset(&server->address, 0, sizeof(union oi_address));
 
 #ifdef HAVE_GNUTLS
   oi_ssl_cache_init(&server->ssl_cache);
@@ -767,7 +825,6 @@ int
 oi_socket_open_tcp (oi_socket *s, const char *host, int port)
 {
   int fd;
-  struct sockaddr_in dest_addr;
 
   if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
     perror("socket()");
@@ -786,13 +843,17 @@ oi_socket_open_tcp (oi_socket *s, const char *host, int port)
   setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &flags, sizeof(flags));
 #endif
   
-  memset(&dest_addr, 0, sizeof(dest_addr));
-  dest_addr.sin_family = AF_INET;
-  dest_addr.sin_port = htons(port);
-  dest_addr.sin_addr.s_addr = inet_addr(host);
-  memset(dest_addr.sin_zero, '\0', sizeof dest_addr.sin_zero);
+  memset(&s->remote_address, 0, sizeof(union oi_address));
 
-  r = connect(fd, (struct sockaddr*)&dest_addr, sizeof dest_addr);
+  s->remote_address.in.sin_family = AF_INET;
+  s->remote_address.in.sin_port = htons(port);
+  s->remote_address.in.sin_addr.s_addr = inet_addr(host);
+
+  r = connect( fd
+             , (struct sockaddr*)&s->remote_address.in
+             , sizeof s->remote_address.in
+             );
+
   if(r < 0 && errno != EINPROGRESS) {
     perror("connect");
     close(fd);
@@ -812,6 +873,12 @@ oi_socket_open_tcp (oi_socket *s, const char *host, int port)
 
 int
 oi_socket_open_unix (oi_socket *socket, const char *socketfile)
+{
+  /* TODO */
+}
+
+int
+oi_socket_open_pair (oi_socket *a, oi_socket *b)
 {
   /* TODO */
 }

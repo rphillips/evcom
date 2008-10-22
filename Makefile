@@ -47,16 +47,17 @@ $(OUTPUT_A): $(OBJ)
 
 ${OBJ}: ${DEP}
 
-test: test_rbtree test/tcp_ping_pong
+test: test_rbtree test/ping_pong
 	./test_rbtree
-	./test/tcp_ping_pong
+	./test/ping_pong unix
+	./test/ping_pong tcp
 
 test_rbtree: test_rbtree.o $(OUTPUT_A)
 	@echo BUILDING test_rbtree
 	@$(CC) $(CFLAGS) -o $@ $< $(OUTPUT_A)
 
-test/tcp_ping_pong: test/tcp_ping_pong.c $(OUTPUT_A)
-	@echo BUILDING test/tcp_ping_pong
+test/ping_pong: test/ping_pong.c $(OUTPUT_A)
+	@echo BUILDING test/ping_pong
 	$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
 
 examples: examples/echo
@@ -69,7 +70,7 @@ clean:
 	@echo CLEANING
 	@rm -f ${OBJ} $(OUTPUT_A) $(OUTPUT_LIB) $(NAME)-${VERSION}.tar.gz 
 	@rm -f test_rbtree  
-	@rm -f test/tcp_ping_pong  
+	@rm -f test/ping_pong  
 	@rm -f examples/echo  
 
 clobber: clean

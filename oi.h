@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 
 #include <ev.h>
@@ -12,18 +13,18 @@
 #endif
 
 /* socket state */
-#define OI_CLOSED    0x01
-#define OI_OPENING   0x02
-#define OI_OPENED    0x04 
-#define OI_CLOSING   0x08
+#define OI_CLOSED    1
+#define OI_OPENING   2
+#define OI_OPENED    3 
+#define OI_CLOSING   4
 
-typedef struct oi_buf    oi_buf;
-typedef struct oi_server oi_server;
-typedef struct oi_socket oi_socket;
+typedef struct oi_buf     oi_buf;
+typedef struct oi_server  oi_server;
+typedef struct oi_socket  oi_socket;
 
 void oi_server_init           (oi_server *, int max_connections);
  int oi_server_listen_tcp     (oi_server *, const char *host, int port);
- int oi_server_listen_unix    (oi_server *, const char *filename);
+ int oi_server_listen_unix    (oi_server *, const char *socketfile, int access_mask);
 void oi_server_attach         (oi_server *, struct ev_loop *loop);
 void oi_server_detach         (oi_server *);
 void oi_server_close          (oi_server *); 
@@ -34,6 +35,7 @@ void oi_server_close          (oi_server *);
 void oi_socket_init           (oi_socket *, float timeout);
  int oi_socket_open_tcp       (oi_socket *, const char *host, int port); 
  int oi_socket_open_unix      (oi_socket *, const char *socketfile);
+ int oi_socket_open_pair      (oi_socket *a, oi_socket *b);
 void oi_socket_attach         (oi_socket *, struct ev_loop *loop);
 void oi_socket_detach         (oi_socket *);
 void oi_socket_read_stop      (oi_socket *);
@@ -43,17 +45,19 @@ void oi_socket_schedule_close (oi_socket *);
 void oi_socket_write          (oi_socket *, oi_buf *);
 void oi_socket_write_simple   (oi_socket *, const char *str, size_t len);
 
+union oi_address {
+  struct sockaddr_un un;
+  struct sockaddr_in in;
+};
+
 struct oi_server {
 /* read only */
   int fd;
   int max_connections;
-  struct sockaddr_in sockaddr;
-  socklen_t socklen;
-  char port[6];
-  char *socketfile;
   struct ev_loop *loop;
-  unsigned listening:1;
   unsigned secure:1;
+  unsigned listening:1;
+  union oi_address address;
 
 /* private */
   ev_io connection_watcher;
@@ -64,7 +68,7 @@ struct oi_server {
 #endif
 
 /* public */
-  oi_socket* (*on_connection) (oi_server *, struct sockaddr_in *, socklen_t);
+  oi_socket* (*on_connection) (oi_server *, struct sockaddr *, socklen_t);
   void       (*on_error)      (oi_server *);
   void *data;
 };
@@ -74,12 +78,13 @@ struct oi_socket {
   int fd;
   int state;
   unsigned secure:1;
-  struct sockaddr_in sockaddr;
-  socklen_t socklen;
   struct ev_loop *loop;
   oi_server *server;
   oi_buf *write_buffer;
   size_t written;
+
+  union oi_address remote_address;
+  union oi_address local_address;
 
 /* private */  
   ev_io error_watcher;

@@ -55,7 +55,7 @@ on_client_close(oi_socket *socket)
 }
 
 static oi_socket* 
-on_server_connection(oi_server *server, struct sockaddr_in *addr, socklen_t len)
+on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
 {
   oi_socket *socket = malloc(sizeof(oi_socket));
   oi_socket_init(socket, 30.0);
@@ -107,7 +107,7 @@ main()
   server.on_connection = on_server_connection;
 
   r = oi_server_listen_tcp(&server, "127.0.0.1", 5000);
-  assert(r > 0 && "problem listening");
+  assert(r >= 0 && "problem listening");
   oi_server_attach(&server, loop);
   //printf("starting server on port 5000\n");
 
