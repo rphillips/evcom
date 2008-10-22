@@ -7,6 +7,10 @@
 #include <ev.h>
 #include "oi.h"
 
+#define SOCKFILE "/tmp/oi.sock"
+#define PORT 5000
+#define HOST "127.0.0.1"
+
 #define PING "PING"
 #define PONG "PONG"
 
@@ -96,17 +100,27 @@ on_client_read(oi_socket *socket, const void *base, size_t len)
 }
 
 int 
-main()
+main(int argc, const char *argv[])
 {
   int r;
   struct ev_loop *loop = ev_default_loop(0);
   oi_server server;
   oi_socket client;
 
+  int is_tcp = 1;
+
+  if(argc >= 2 && strcmp(argv[1], "unix") == 0)
+    is_tcp = 0;
+
   oi_server_init(&server, 10);
   server.on_connection = on_server_connection;
 
-  r = oi_server_listen_tcp(&server, "127.0.0.1", 5000);
+  if(is_tcp) {
+    r = oi_server_listen_tcp(&server, HOST, PORT);
+  } else {
+    r = oi_server_listen_unix(&server, SOCKFILE, 0700);
+  }
+
   assert(r >= 0 && "problem listening");
   oi_server_attach(&server, loop);
   //printf("starting server on port 5000\n");
@@ -117,7 +131,12 @@ main()
   client.on_connect = on_client_connect;
   client.on_close   = on_client_close;
 
-  r = oi_socket_open_tcp(&client, "127.0.0.1", 5000);
+  if(is_tcp) {
+    r = oi_socket_open_tcp(&client, HOST, PORT);
+  } else {
+    r = oi_socket_open_unix(&client, SOCKFILE);
+  }
+
   assert(r > 0 && "problem connecting");
   oi_socket_attach(&client, loop);
   //printf("connecting client to port 5000\n");

@@ -872,9 +872,52 @@ oi_socket_open_tcp (oi_socket *s, const char *host, int port)
 }
 
 int
-oi_socket_open_unix (oi_socket *socket, const char *socketfile)
+oi_socket_open_unix (oi_socket *s, const char *socketfile)
 {
-  /* TODO */
+  int fd;
+
+  if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+    perror("socket()");
+    return -1;
+  }
+
+  int flags = fcntl(fd, F_GETFL, 0);
+  int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+  if(r < 0) {
+    oi_error("error setting peer socket non-blocking");
+    return r;
+  }
+
+#ifdef SO_NOSIGPIPE
+  flags = 1;
+  setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &flags, sizeof(flags));
+#endif
+  
+  memset(&s->remote_address, 0, sizeof(union oi_address));
+
+  s->remote_address.un.sun_family = AF_UNIX;
+  strcpy(s->remote_address.un.sun_path, socketfile);
+
+  r = connect( fd
+             , (struct sockaddr*)&s->remote_address.un
+             , sizeof s->remote_address.un
+             );
+
+  if(r < 0 && errno != EINPROGRESS) {
+    perror("connect");
+    close(fd);
+    return fd;
+  }
+
+  s->fd = fd;
+  s->state = OI_OPENING;
+  s->secure = FALSE;
+
+  ev_io_set (&s->read_watcher, fd, EV_READ);
+  ev_io_set (&s->write_watcher, fd, EV_WRITE);
+  ev_io_set (&s->error_watcher, fd, EV_ERROR);
+
+  return fd;
 }
 
 int
