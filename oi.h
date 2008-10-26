@@ -29,13 +29,13 @@ void oi_server_attach         (oi_server *, struct ev_loop *loop);
 void oi_server_detach         (oi_server *);
 void oi_server_close          (oi_server *); 
 #ifdef HAVE_GNUTLS
- int oi_server_set_secure     (oi_server *, const char *cert_file, const char *key_file, gnutls_x509_crt_fmt_t type);
+ int oi_server_set_secure     (oi_server *, const char *cert_file, const char *key_file);
 #endif 
 
 void oi_socket_init           (oi_socket *, float timeout);
  int oi_socket_open_tcp       (oi_socket *, const char *host, int port); 
  int oi_socket_open_unix      (oi_socket *, const char *socketfile);
- int oi_socket_open_pair      (oi_socket *a, oi_socket *b);
+// int oi_socket_open_pair      (oi_socket *a, oi_socket *b);
 void oi_socket_attach         (oi_socket *, struct ev_loop *loop);
 void oi_socket_detach         (oi_socket *);
 void oi_socket_read_stop      (oi_socket *);

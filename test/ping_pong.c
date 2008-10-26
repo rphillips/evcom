@@ -109,6 +109,9 @@ main(int argc, const char *argv[])
 
   int is_tcp = 1;
 
+  printf("sizeof(oi_server): %d\n", sizeof(oi_server));
+  printf("sizeof(oi_socket): %d\n", sizeof(oi_socket));
+
   if(argc >= 2 && strcmp(argv[1], "unix") == 0)
     is_tcp = 0;
 

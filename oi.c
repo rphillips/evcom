@@ -77,6 +77,7 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
   union oi_address address; /* connector's address information */
   socklen_t addr_len = sizeof(address);
   
+  /* TODO accept all possible connections? currently: just one */
   int fd = accept(server->fd, (struct sockaddr*) &address, &addr_len);
   if(fd < 0) {
     perror("accept()");
@@ -284,6 +285,13 @@ oi_server_close(oi_server *server)
     oi_server_detach(server);
     close(server->fd);
     server->listening = FALSE;
+#ifdef HAVE_GNUTLS
+    if(server->secure) {
+      gnutls_certificate_free_credentials(server->credentials);
+      gnutls_global_deinit();
+    }
+    server->secure = FALSE;
+#endif /* HAVE_GNUTLS */
   }
 }
 
@@ -294,24 +302,23 @@ oi_server_close(oi_server *server)
  * GNUTLS. In particular 
  * gnutls_global_set_mem_functions() 
  * gnutls_global_set_log_function()
- * Also see the note above oi_connection_init() about setting gnutls cache
- * access functions
+ * Also see the note above about setting gnutls cache access functions
  *
- * cert_file: the filename of a PEM certificate file
+ * cert_file: the filename of a x509 PEM certificate file
  *
  * key_file: the filename of a private key. Currently only PKCS-1 encoded
  * RSA and DSA private keys are accepted. 
  */
 int 
-oi_server_set_secure (server, cert_file, key_file, type)
+oi_server_set_secure (server, cert_file, key_file)
   oi_server *server;
   const char *cert_file, *key_file;
-  gnutls_x509_crt_fmt_t type;
 {
-  server->secure = TRUE;
   gnutls_global_init();
   gnutls_certificate_allocate_credentials(&server->credentials);
-  /* todo gnutls_certificate_free_credentials */
+  /* BLOCKING >:( 
+   * use gnutls_certificate_set_x509_key_mem() after loading
+   */
   int r = gnutls_certificate_set_x509_key_file( server->credentials
                                               , cert_file
                                               , key_file
@@ -321,6 +328,9 @@ oi_server_set_secure (server, cert_file, key_file, type)
     oi_error("loading certificates");
     return -1;
   }
+
+  server->secure = TRUE;
+
   return 1;
 }
 #endif /* HAVE_GNUTLS */
@@ -691,7 +701,7 @@ on_writable(struct ev_loop *loop, ev_io *watcher, int revents)
  *   gnutls_db_set_remove_function (socket->session, _);
  *   gnutls_db_set_store_function (socket->session, _);
  *   gnutls_db_set_ptr (socket->session, _);
- * To provide a better means of storing SSL session caches. libebb provides
+ * To provide a better means of storing SSL session caches. liboi provides
  * only a simple default implementation. 
  */
 void 
@@ -924,5 +934,6 @@ int
 oi_socket_open_pair (oi_socket *a, oi_socket *b)
 {
   /* TODO */
+  return -1;
 }
 
