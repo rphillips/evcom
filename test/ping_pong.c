@@ -30,7 +30,7 @@ static gnutls_dh_params_t dh_params;
 #endif
 
 static void 
-on_server_read(oi_socket *socket, const void *base, size_t len)
+on_peer_read(oi_socket *socket, const void *base, size_t len)
 {
   if(len == 0) 
     return;
@@ -44,7 +44,7 @@ on_server_read(oi_socket *socket, const void *base, size_t len)
 }
 
 static void 
-on_error(oi_socket *socket, int domain, int code)
+on_peer_error(oi_socket *socket, int domain, int code)
 {
   printf("an error happend on the peer socket\n");
   switch(domain) {
@@ -74,7 +74,7 @@ on_client_error(oi_socket *socket, int domain, int code)
 }
 
 static void 
-on_close(oi_socket *socket)
+on_peer_close(oi_socket *socket)
 {
 #ifdef HAVE_GNUTLS
   if(is_secure) {
@@ -87,20 +87,37 @@ on_close(oi_socket *socket)
 }
 
 static void 
+on_peer_timeout(oi_socket *socket)
+{
+  printf("peer connection timeout\n");
+  exit(1);
+}
+
+static void 
 on_client_close(oi_socket *socket)
 {
   //printf("client connection closed\n");
   ev_unloop(socket->loop, EVUNLOOP_ALL);
 }
 
+static void 
+on_client_timeout(oi_socket *socket)
+{
+  printf("client connection timeout\n");
+  exit(1);
+}
+
+
+
 static oi_socket* 
 on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
 {
   oi_socket *socket = malloc(sizeof(oi_socket));
   oi_socket_init(socket, 30.0);
-  socket->on_read = on_server_read;
-  socket->on_error = on_error;
-  socket->on_close = on_close;
+  socket->on_read = on_peer_read;
+  socket->on_error = on_peer_error;
+  socket->on_close = on_peer_close;
+  socket->on_timeout = on_peer_timeout;
 
 #ifdef HAVE_GNUTLS
   if(is_secure) {
@@ -198,6 +215,7 @@ main(int argc, const char *argv[])
   client.on_error   = on_client_error;
   client.on_connect = on_client_connect;
   client.on_close   = on_client_close;
+  client.on_timeout = on_client_timeout;
 
 #ifdef HAVE_GNUTLS
   gnutls_session_t client_session;
@@ -213,7 +231,7 @@ main(int argc, const char *argv[])
 
     oi_socket_set_secure_session(&client, client_session);
 
-    printf("using ssl\n");
+    // printf("using ssl\n");
     assert(client.secure);
   }
 #endif /* HAVE_GNUTLS */

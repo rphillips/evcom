@@ -42,11 +42,22 @@ $(OUTPUT_A): $(OBJ)
 
 ${OBJ}: ${DEP}
 
+PASS="PASS"
+FAIL="FAIL"
+FAIL=echo "\033[1;31mFAIL\033[m"
+PASS=echo "\033[1;32mPASS\033[m"
+TEST=|| $(FAIL) && $(PASS)
+
 test: test/ping_pong
-	./test/ping_pong unix
-	./test/ping_pong tcp
-	./test/ping_pong unix secure
-	./test/ping_pong tcp secure
+	@echo "ping pong"
+	@echo -n "- unix: "
+	@./test/ping_pong unix $(TEST)
+	@echo -n "- tcp: "
+	@./test/ping_pong tcp $(TEST)
+	@echo -n "- unix secure: "
+	@./test/ping_pong unix secure $(TEST)
+	@echo -n "- tcp secure: "
+	@./test/ping_pong tcp secure $(TEST)
 
 test/ping_pong: test/ping_pong.c $(OUTPUT_A)
 	@echo BUILDING test/ping_pong
