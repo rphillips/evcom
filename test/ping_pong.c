@@ -38,7 +38,7 @@ on_server_read(oi_socket *socket, const void *base, size_t len)
   char buf[200000];
   strncpy(buf, base, len);
   buf[len] = 0;
-  printf("server got message: %s\n", buf);
+  //printf("server got message: %s\n", buf);
 
   oi_socket_write_simple(socket, PONG, sizeof PONG);
 }
@@ -50,6 +50,9 @@ on_error(oi_socket *socket, int domain, int code)
   switch(domain) {
     case OI_HANDSHAKE_ERROR:
       printf("handshake error: %d\n", code);
+      break;
+    case OI_BYE_ERROR:
+      printf("bye error: %d\n", code);
       break;
   }
   exit(1);
@@ -79,14 +82,14 @@ on_close(oi_socket *socket)
     gnutls_deinit(session);
   }
 #endif
-  printf("server connection closed\n");
+  //printf("server connection closed\n");
   free(socket);
 }
 
 static void 
 on_client_close(oi_socket *socket)
 {
-  printf("client connection closed\n");
+  //printf("client connection closed\n");
   ev_unloop(socket->loop, EVUNLOOP_ALL);
 }
 
@@ -114,7 +117,7 @@ on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
   }
 #endif
 
-  printf("on server connection\n");
+  //printf("on server connection\n");
 
   return socket;
 }
@@ -122,7 +125,7 @@ on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
 static void 
 on_client_connect(oi_socket *socket)
 {
-  printf("client connected. sending ping\n");
+  //printf("client connected. sending ping\n");
   oi_socket_write_simple(socket, PING, sizeof PING);
 }
 
@@ -132,7 +135,7 @@ on_client_read(oi_socket *socket, const void *base, size_t len)
   char buf[200000];
   strncpy(buf, base, len);
   buf[len] = 0;
-  printf("client got message: %s\n", buf);
+  //printf("client got message: %s\n", buf);
   
   if(strcmp(buf, PONG) == 0) {
 
@@ -182,7 +185,7 @@ main(int argc, const char *argv[])
 
   if(is_tcp) {
     r = oi_server_listen_tcp(&server, HOST, PORT);
-    printf("starting server on port 5000\n");
+    // printf("starting server on port 5000\n");
   } else {
     r = oi_server_listen_unix(&server, SOCKFILE, 0700);
   }
@@ -190,7 +193,7 @@ main(int argc, const char *argv[])
 
   oi_server_attach(&server, loop);
 
-  oi_socket_init(&client, 3.0);
+  oi_socket_init(&client, 30.0);
   client.on_read    = on_client_read;
   client.on_error   = on_client_error;
   client.on_connect = on_client_connect;
@@ -208,7 +211,6 @@ main(int argc, const char *argv[])
     /* Need to enable anonymous KX specifically. */
     gnutls_credentials_set (client_session, GNUTLS_CRD_ANON, client_credentials);
 
-
     oi_socket_set_secure_session(&client, client_session);
 
     printf("using ssl\n");
@@ -218,7 +220,7 @@ main(int argc, const char *argv[])
 
   if(is_tcp) {
     r = oi_socket_open_tcp(&client, HOST, PORT);
-    printf("connecting client to port 5000\n");
+    //printf("connecting client to port 5000\n");
   } else {
     r = oi_socket_open_unix(&client, SOCKFILE);
   }

@@ -42,25 +42,40 @@
 
 #define is_inet_address(address) (address.in.sun_family == AF_INET)
 
-static ssize_t 
-nosigpipe_push(void *data, const void *buf, size_t len)
-{
-  int fd = (int)data;
-  int flags = 0;
-#ifdef MSG_NOSIGNAL
-  flags = MSG_NOSIGNAL;
-#endif
-  return send(fd, buf, len, flags);
-}
 
 #ifdef HAVE_GNUTLS
+static ssize_t 
+nosigpipe_push(gnutls_transport_ptr_t data, const void *buf, size_t len)
+{
+  oi_socket *socket = (oi_socket*)data;
+  assert(socket->secure);
+  int flags = 0;
+#ifdef MSG_NOSIGNAL
+  flags |= MSG_NOSIGNAL;
+#endif
+#ifdef MSG_DONTWAIT
+  flags |= MSG_DONTWAIT;
+#endif
+  int r = send(socket->fd, buf, len, flags);
+
+  if(r == -1) {
+    /* necessary ? */
+    gnutls_transport_set_errno(socket->session, errno);
+  }
+
+  return r;
+}
+
 static void
 set_transport_gnutls(oi_socket *socket)
 {
   assert(socket->secure);
   gnutls_transport_set_lowat(socket->session, 0); 
-  gnutls_transport_set_ptr(socket->session, (gnutls_transport_ptr)socket->fd); 
   gnutls_transport_set_push_function(socket->session, nosigpipe_push);
+  gnutls_transport_set_ptr2 ( socket->session
+                            , (gnutls_transport_ptr_t)socket->fd /*recv*/
+                            , socket /* send */
+                            );
 }
 
 /* Tells the socket to use transport layer security (SSL). liboi does not
@@ -396,9 +411,13 @@ update_write_buffer_after_send(oi_socket *socket, ssize_t sent)
   socket->written += sent;
 
   if(to_write->written == to_write->len) {
-    if(to_write->release)
-      to_write->release(to_write);
+
     socket->write_buffer = to_write->next;
+
+    if(to_write->release) {
+      to_write->release(to_write);
+    }  
+
     if(socket->write_buffer == NULL) {
       ev_io_stop(socket->loop, &socket->write_watcher);
       if(socket->on_drain)
@@ -526,12 +545,22 @@ socket_send(oi_socket *socket)
 
   assert(socket->secure == FALSE);
   assert(socket->state == OI_OPENED || socket->state == OI_OPENING);
+  
+  int flags = 0;
+#ifdef MSG_NOSIGNAL
+  flags |= MSG_NOSIGNAL;
+#endif
+#ifdef MSG_DONTWAIT
+  flags |= MSG_DONTWAIT;
+#endif
 
   /* TODO use writev() here */
-  sent = nosigpipe_push( (void*)socket->fd /* yes, funky. XXX */
-                       , to_write->base + to_write->written
-                       , to_write->len - to_write->written
-                       );
+  sent = send( socket->fd
+             , to_write->base + to_write->written
+             , to_write->len - to_write->written
+             , flags
+             );
+
   if(sent < 0) {
     oi_error("close socket on write.");
     oi_socket_schedule_close(socket);

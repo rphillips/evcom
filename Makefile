@@ -14,7 +14,7 @@ OUTPUT_A=$(NAME).a
 
 LINKER=$(CC) $(LDOPT)
 
-all: options $(OUTPUT_LIB) $(OUTPUT_A)
+all: options $(OUTPUT_LIB) $(OUTPUT_A) test/ping_pong
 
 options:
 	@echo ${NAME} build options:
@@ -45,6 +45,8 @@ ${OBJ}: ${DEP}
 test: test/ping_pong
 	./test/ping_pong unix
 	./test/ping_pong tcp
+	./test/ping_pong unix secure
+	./test/ping_pong tcp secure
 
 test/ping_pong: test/ping_pong.c $(OUTPUT_A)
 	@echo BUILDING test/ping_pong
