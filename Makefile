@@ -5,11 +5,6 @@ include config.mk
 
 DEP = oi.h
 SRC = oi.c
-ifeq ($(GNUTLSFLAGS),)
-else
-	SRC += rbtree.c oi_ssl_cache.c
-	DEP += rbtree.h oi_ssl_cache.h
-endif
 OBJ = ${SRC:.c=.o}
 
 VERSION = 0.1
@@ -47,14 +42,9 @@ $(OUTPUT_A): $(OBJ)
 
 ${OBJ}: ${DEP}
 
-test: test_rbtree test/ping_pong
-	./test_rbtree
+test: test/ping_pong
 	./test/ping_pong unix
 	./test/ping_pong tcp
-
-test_rbtree: test_rbtree.o $(OUTPUT_A)
-	@echo BUILDING test_rbtree
-	@$(CC) $(CFLAGS) -o $@ $< $(OUTPUT_A)
 
 test/ping_pong: test/ping_pong.c $(OUTPUT_A)
 	@echo BUILDING test/ping_pong
@@ -69,7 +59,6 @@ examples/echo: examples/echo.c $(OUTPUT_A)
 clean:
 	@echo CLEANING
 	@rm -f ${OBJ} $(OUTPUT_A) $(OUTPUT_LIB) $(NAME)-${VERSION}.tar.gz 
-	@rm -f test_rbtree  
 	@rm -f test/ping_pong  
 	@rm -f examples/echo  
 

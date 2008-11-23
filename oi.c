@@ -24,7 +24,6 @@
 #define oi_error(FORMAT, ...) fprintf(stderr, "error: " FORMAT "\n", ##__VA_ARGS__)
 
 #ifdef HAVE_GNUTLS
-# include "oi_ssl_cache.h"
 # include <gnutls/gnutls.h>
 # define GNUTLS_NEED_WRITE (gnutls_record_get_direction(socket->session) == 1)
 # define GNUTLS_NEED_READ (gnutls_record_get_direction(socket->session) == 0)
@@ -54,6 +53,33 @@ nosigpipe_push(void *data, const void *buf, size_t len)
   return send(fd, buf, len, flags);
 }
 
+#ifdef HAVE_GNUTLS
+static void
+set_transport_gnutls(oi_socket *socket)
+{
+  assert(socket->secure);
+  gnutls_transport_set_lowat(socket->session, 0); 
+  gnutls_transport_set_ptr(socket->session, (gnutls_transport_ptr)socket->fd); 
+  gnutls_transport_set_push_function(socket->session, nosigpipe_push);
+}
+
+/* Tells the socket to use transport layer security (SSL). liboi does not
+ * want to make any decisions about security requirements, so the
+ * majoirty of GnuTLS configuration is left to the user. Only the transport
+ * layer of GnuTLS is controlled by liboi.
+ *
+ * That is, do not use gnutls_transport_* functions. 
+ * Do use the rest of GnuTLS's API.
+ */
+void
+oi_socket_set_secure_session (oi_socket *socket, gnutls_session_t session)
+{
+  socket->session = session;
+  socket->secure = TRUE;
+}
+#endif /* HAVE GNUTLS */
+
+
 /* Internal callback 
  * Called by server->connection_watcher.
  */
@@ -62,7 +88,7 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   oi_server *server = watcher->data;
 
-  //printf("on connection!\n");
+ // printf("on connection!\n");
 
   assert(server->listening);
   assert(server->loop == loop);
@@ -108,20 +134,11 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
   socket->fd = fd;
   socket->state = OI_OPENING;
   socket->server = server;
-  socket->secure = server->secure;
   memcpy(&socket->remote_address, &address, addr_len);
 
 #ifdef HAVE_GNUTLS
   if(socket->secure) {
-    gnutls_init(&socket->session, GNUTLS_SERVER);
-    gnutls_transport_set_lowat(socket->session, 0); 
-    gnutls_set_default_priority(socket->session);
-    gnutls_credentials_set(socket->session, GNUTLS_CRD_CERTIFICATE, socket->server->credentials);
-
-    gnutls_transport_set_ptr(socket->session, (gnutls_transport_ptr) fd); 
-    gnutls_transport_set_push_function(socket->session, nosigpipe_push);
-
-    oi_ssl_cache_session(&server->ssl_cache, socket->session);
+    set_transport_gnutls(socket);
   }
 #endif /* HAVE_GNUTLS */
 
@@ -285,54 +302,10 @@ oi_server_close(oi_server *server)
     oi_server_detach(server);
     close(server->fd);
     server->listening = FALSE;
-#ifdef HAVE_GNUTLS
-    if(server->secure) {
-      gnutls_certificate_free_credentials(server->credentials);
-      gnutls_global_deinit();
-    }
-    server->secure = FALSE;
-#endif /* HAVE_GNUTLS */
   }
 }
 
 #ifdef HAVE_GNUTLS
-/* similar to server_init. 
- *
- * the user of secure server might want to set additional callbacks from
- * GNUTLS. In particular 
- * gnutls_global_set_mem_functions() 
- * gnutls_global_set_log_function()
- * Also see the note above about setting gnutls cache access functions
- *
- * cert_file: the filename of a x509 PEM certificate file
- *
- * key_file: the filename of a private key. Currently only PKCS-1 encoded
- * RSA and DSA private keys are accepted. 
- */
-int 
-oi_server_set_secure (server, cert_file, key_file)
-  oi_server *server;
-  const char *cert_file, *key_file;
-{
-  gnutls_global_init();
-  gnutls_certificate_allocate_credentials(&server->credentials);
-  /* BLOCKING >:( 
-   * use gnutls_certificate_set_x509_key_mem() after loading
-   */
-  int r = gnutls_certificate_set_x509_key_file( server->credentials
-                                              , cert_file
-                                              , key_file
-                                              , GNUTLS_X509_FMT_PEM
-                                              );
-  if(r < 0) {
-    oi_error("loading certificates");
-    return -1;
-  }
-
-  server->secure = TRUE;
-
-  return 1;
-}
 #endif /* HAVE_GNUTLS */
 
 void
@@ -357,20 +330,13 @@ oi_server_init(oi_server *server, int max_connections)
   server->fd = -1;
   server->connection_watcher.data = server;
   ev_init (&server->connection_watcher, on_connection);
-  server->secure = FALSE;
 
   memset(&server->address, 0, sizeof(union oi_address));
-
-#ifdef HAVE_GNUTLS
-  oi_ssl_cache_init(&server->ssl_cache);
-  server->credentials = NULL;
-#endif
 
   server->on_connection = NULL;
   server->on_error = NULL;
   server->data = NULL;
 }
-
 
 static void 
 close_socket(oi_socket *socket)
@@ -399,11 +365,10 @@ on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
 
   assert(watcher == &socket->timeout_watcher);
 
-  printf("on_timeout\n");
+ // printf("on_timeout\n");
 
   if(socket->on_timeout) {
     socket->on_timeout(socket);
-    oi_socket_reset_timeout(socket);
   }
 
   oi_socket_schedule_close(socket);
@@ -418,7 +383,7 @@ on_error(struct ev_loop *loop, ev_io *watcher, int revents)
 
   oi_error("error on socket");
   if(socket->on_error) {
-    socket->on_error(socket);
+    socket->on_error(socket, OI_LOOP_ERROR, 0);
   }
   close_socket(socket);
 }
@@ -454,7 +419,7 @@ secure_socket_send(oi_socket *socket)
     return;
   }
 
-  assert(socket->secure == TRUE);
+  assert(socket->secure);
   assert(socket->state == OI_OPENED);
 
   sent = gnutls_record_send( socket->session
@@ -508,8 +473,12 @@ secure_handshake(oi_socket *socket)
   if(r < 0) {
     if(r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN)
       GNUTLS_SET_DIRECTION(socket);
-    if(gnutls_error_is_fatal(r))
+    if(gnutls_error_is_fatal(r)) {
+      if(socket->on_error) {
+        socket->on_error(socket, OI_HANDSHAKE_ERROR, r);
+      }
       close_socket(socket);
+    }
     return;
   }
   oi_socket_reset_timeout(socket);
@@ -532,13 +501,14 @@ secure_goodbye(oi_socket *socket)
     if(r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN)
       GNUTLS_SET_DIRECTION(socket);
     if(gnutls_error_is_fatal(r)) 
+      if(socket->on_error) {
+        socket->on_error(socket, OI_BYE_ERROR, r);
+      }
       goto die;
     return;
   }
 
 die:
-  if(socket->session) 
-    gnutls_deinit(socket->session);
   close_socket(socket);
 }
 #endif /* HAVE_GNUTLS */
@@ -595,7 +565,7 @@ socket_recv(oi_socket *socket)
     }
   }
   if(recved == 0)  {
-    /* XXX is this correct ? */
+    /* TODO callback? for half-closed connections? */
     oi_socket_schedule_close(socket);
     return;
   }
@@ -613,7 +583,7 @@ on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   oi_socket *socket = watcher->data;
 
-  //printf("on_readable\n");
+ // printf("on_readable\n");
 
   //assert(ev_is_active(&socket->timeout_watcher)); // TODO -- why is this broken?
   assert(watcher == &socket->read_watcher);
@@ -657,7 +627,7 @@ on_writable(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   oi_socket *socket = watcher->data;
   
-  //printf("on_writable\n");
+ // printf("on_writable\n");
 
   assert(revents == EV_WRITE);
 //  assert(ev_is_active(&socket->timeout_watcher)); // TODO -- why is this broken?
@@ -701,8 +671,6 @@ on_writable(struct ev_loop *loop, ev_io *watcher, int revents)
  *   gnutls_db_set_remove_function (socket->session, _);
  *   gnutls_db_set_store_function (socket->session, _);
  *   gnutls_db_set_ptr (socket->session, _);
- * To provide a better means of storing SSL session caches. liboi provides
- * only a simple default implementation. 
  */
 void 
 oi_socket_init(oi_socket *socket, float timeout)
@@ -712,7 +680,6 @@ oi_socket_init(oi_socket *socket, float timeout)
   socket->loop = NULL;
   socket->write_buffer = NULL;
   socket->state = OI_CLOSED;
-  socket->secure = FALSE;
 
   ev_init (&socket->write_watcher, on_writable);
   socket->write_watcher.data = socket;
@@ -723,9 +690,10 @@ oi_socket_init(oi_socket *socket, float timeout)
   ev_init(&socket->error_watcher, on_error);
   socket->error_watcher.data = socket;
 
+  socket->secure = FALSE;
 #ifdef HAVE_GNUTLS
   socket->session = NULL;
-#endif /* HAVE_GNUTLS */
+#endif 
 
   ev_timer_init(&socket->timeout_watcher, on_timeout, timeout, 0.);
   socket->timeout_watcher.data = socket;  
@@ -762,10 +730,6 @@ oi_socket_reset_timeout(oi_socket *socket)
 /**
  * Writes a string to the socket. This is actually sets a watcher which may
  * take multiple iterations to write the entire string.
- *
- * This can only be called once at a time. If you call it again while the
- * socket is writing another buffer the oi_socket_write will return FALSE
- * and ignore the request.
  */
 void 
 oi_socket_write(oi_socket *socket, oi_buf *buf)
@@ -786,6 +750,9 @@ oi_socket_write(oi_socket *socket, oi_buf *buf)
     ev_io_start(socket->loop, &socket->write_watcher);
 }
 
+/* Writes a string to the socket. 
+ * NOTE: Allocates memory. Avoid for performance applications.
+ */ 
 void
 oi_socket_write_simple(oi_socket *socket, const char *str, size_t len)
 {
@@ -806,7 +773,6 @@ oi_socket_attach(oi_socket *socket, struct ev_loop *loop)
   ev_io_start(loop, &socket->read_watcher);
   ev_io_start(loop, &socket->write_watcher);
 }
-
 
 void
 oi_socket_detach(oi_socket *socket)
@@ -872,11 +838,14 @@ oi_socket_open_tcp (oi_socket *s, const char *host, int port)
 
   s->fd = fd;
   s->state = OI_OPENING;
-  s->secure = FALSE;
 
   ev_io_set (&s->read_watcher, fd, EV_READ);
   ev_io_set (&s->write_watcher, fd, EV_WRITE);
   ev_io_set (&s->error_watcher, fd, EV_ERROR);
+
+  if(s->secure) {
+    set_transport_gnutls(s);
+  }
 
   return fd;
 }
@@ -921,11 +890,14 @@ oi_socket_open_unix (oi_socket *s, const char *socketfile)
 
   s->fd = fd;
   s->state = OI_OPENING;
-  s->secure = FALSE;
 
   ev_io_set (&s->read_watcher, fd, EV_READ);
   ev_io_set (&s->write_watcher, fd, EV_WRITE);
   ev_io_set (&s->error_watcher, fd, EV_ERROR);
+
+  if(s->secure) {
+    set_transport_gnutls(s);
+  }
 
   return fd;
 }
