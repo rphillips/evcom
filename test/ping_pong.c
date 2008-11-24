@@ -19,6 +19,7 @@
 #define PONG "PONG"
 #define EXCHANGES 5
 
+int nconnections; 
 int successful_ping_count; 
 static int is_secure = 0;
 
@@ -38,7 +39,7 @@ on_peer_read(oi_socket *socket, const void *base, size_t len)
   char buf[200000];
   strncpy(buf, base, len);
   buf[len] = 0;
-  //printf("server got message: %s\n", buf);
+  printf("server got message: %s\n", buf);
 
   oi_socket_write_simple(socket, PONG, sizeof PONG);
 }
@@ -46,13 +47,13 @@ on_peer_read(oi_socket *socket, const void *base, size_t len)
 static void 
 on_peer_error(oi_socket *socket, int domain, int code)
 {
-  printf("an error happend on the peer socket\n");
+  fprintf(stderr, "an error happend on the peer socket\n");
   switch(domain) {
     case OI_HANDSHAKE_ERROR:
-      printf("handshake error: %d\n", code);
+      fprintf(stderr, "handshake error: %d\n", code);
       break;
     case OI_BYE_ERROR:
-      printf("bye error: %d\n", code);
+      fprintf(stderr, "bye error: %d\n", code);
       break;
   }
   exit(1);
@@ -61,13 +62,13 @@ on_peer_error(oi_socket *socket, int domain, int code)
 static void 
 on_client_error(oi_socket *socket, int domain, int code)
 {
-  printf("an error happend on the client socket\n");
+  fprintf(stderr, "an error happend on the client socket\n");
   switch(domain) {
     case OI_HANDSHAKE_ERROR:
-      printf("handshake error: %d\n", code);
+      fprintf(stderr, "handshake error: %d\n", code);
       break;
     case OI_BYE_ERROR:
-      printf("bye error: %d\n", code);
+      fprintf(stderr, "bye error: %d\n", code);
       break;
   }
   exit(1);
@@ -82,21 +83,21 @@ on_peer_close(oi_socket *socket)
     gnutls_deinit(session);
   }
 #endif
-  //printf("server connection closed\n");
+  printf("server connection closed\n");
   free(socket);
 }
 
 static void 
 on_peer_timeout(oi_socket *socket)
 {
-  printf("peer connection timeout\n");
+  fprintf(stderr, "peer connection timeout\n");
   exit(1);
 }
 
 static void 
 on_client_close(oi_socket *socket)
 {
-  //printf("client connection closed\n");
+  printf("client connection closed\n");
   ev_unloop(socket->loop, EVUNLOOP_ALL);
 }
 
@@ -107,17 +108,17 @@ on_client_timeout(oi_socket *socket)
   exit(1);
 }
 
-
-
 static oi_socket* 
 on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
 {
   oi_socket *socket = malloc(sizeof(oi_socket));
-  oi_socket_init(socket, 30.0);
+  oi_socket_init(socket, 3000.0);
   socket->on_read = on_peer_read;
   socket->on_error = on_peer_error;
   socket->on_close = on_peer_close;
   socket->on_timeout = on_peer_timeout;
+
+  nconnections++;
 
 #ifdef HAVE_GNUTLS
   if(is_secure) {
@@ -134,7 +135,7 @@ on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
   }
 #endif
 
-  //printf("on server connection\n");
+  printf("on server connection\n");
 
   return socket;
 }
@@ -142,7 +143,7 @@ on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
 static void 
 on_client_connect(oi_socket *socket)
 {
-  //printf("client connected. sending ping\n");
+  printf("client connected. sending ping\n");
   oi_socket_write_simple(socket, PING, sizeof PING);
 }
 
@@ -152,12 +153,12 @@ on_client_read(oi_socket *socket, const void *base, size_t len)
   char buf[200000];
   strncpy(buf, base, len);
   buf[len] = 0;
-  //printf("client got message: %s\n", buf);
+  printf("client got message: %s\n", buf);
   
   if(strcmp(buf, PONG) == 0) {
 
     if(++successful_ping_count > EXCHANGES) {
-      oi_socket_schedule_close(socket);
+      oi_socket_close(socket);
       return;
     } 
     oi_socket_write_simple(socket, PING, sizeof PING);
@@ -177,8 +178,8 @@ main(int argc, const char *argv[])
 
   int is_tcp = 1;
 
-  //printf("sizeof(oi_server): %d\n", sizeof(oi_server));
-  //printf("sizeof(oi_socket): %d\n", sizeof(oi_socket));
+  printf("sizeof(oi_server): %d\n", sizeof(oi_server));
+  printf("sizeof(oi_socket): %d\n", sizeof(oi_socket));
 
   if(argc >= 2 && strcmp(argv[1], "unix") == 0)
     is_tcp = 0;
@@ -202,7 +203,7 @@ main(int argc, const char *argv[])
 
   if(is_tcp) {
     r = oi_server_listen_tcp(&server, HOST, PORT);
-    // printf("starting server on port 5000\n");
+    printf("starting server on port 5000\n");
   } else {
     r = oi_server_listen_unix(&server, SOCKFILE, 0700);
   }
@@ -210,7 +211,7 @@ main(int argc, const char *argv[])
 
   oi_server_attach(&server, loop);
 
-  oi_socket_init(&client, 30.0);
+  oi_socket_init(&client, 3000.0);
   client.on_read    = on_client_read;
   client.on_error   = on_client_error;
   client.on_connect = on_client_connect;
@@ -231,14 +232,14 @@ main(int argc, const char *argv[])
 
     oi_socket_set_secure_session(&client, client_session);
 
-    // printf("using ssl\n");
+    printf("using ssl\n");
     assert(client.secure);
   }
 #endif /* HAVE_GNUTLS */
 
   if(is_tcp) {
     r = oi_socket_open_tcp(&client, HOST, PORT);
-    //printf("connecting client to port 5000\n");
+    printf("connecting client to port 5000\n");
   } else {
     r = oi_socket_open_unix(&client, SOCKFILE);
   }
@@ -249,6 +250,7 @@ main(int argc, const char *argv[])
   ev_loop(loop, 0);
 
   assert(successful_ping_count == EXCHANGES + 1);
+  assert(nconnections == 1);
 
 #ifdef HAVE_GNUTLS
   if(is_secure) {

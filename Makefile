@@ -46,7 +46,7 @@ PASS="PASS"
 FAIL="FAIL"
 FAIL=echo "\033[1;31mFAIL\033[m"
 PASS=echo "\033[1;32mPASS\033[m"
-TEST=|| $(FAIL) && $(PASS)
+TEST= && $(PASS) || $(FAIL)
 
 test: test/ping_pong
 	@echo "ping pong"

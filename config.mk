@@ -13,11 +13,11 @@ GNUTLSFLAGS = -DHAVE_GNUTLS
 
 # includes and libs
 INCS = -I${EVINC} -I${GNUTLSINC}
-LIBS = ${EVLIBS} ${GNUTLSLIBS}
+LIBS = ${EVLIBS} ${GNUTLSLIBS} # -lefence
 
 # flags
 CPPFLAGS = -DVERSION=\"$(VERSION)\" ${GNUTLSFLAGS}
-CFLAGS   = -O2 -g -Wall ${INCS} ${CPPFLAGS} -fPIC
+CFLAGS   = -g -Wall ${INCS} ${CPPFLAGS} -fPIC # -O2 
 LDFLAGS  = -s ${LIBS}
 LDOPT    = -shared
 SUFFIX   = so
