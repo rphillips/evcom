@@ -28,15 +28,15 @@
 # define GNUTLS_NEED_WRITE (gnutls_record_get_direction(socket->session) == 1)
 # define GNUTLS_NEED_READ (gnutls_record_get_direction(socket->session) == 0)
 # define GNUTLS_SET_DIRECTION(socket)                       \
-{                                                           \
-      if(GNUTLS_NEED_WRITE) {                               \
-        ev_io_start (socket->loop, &socket->write_watcher); \
-        ev_io_stop  (socket->loop, &socket->read_watcher ); \
-      } else {                                              \
-        ev_io_start (socket->loop, &socket->read_watcher ); \
-        ev_io_stop  (socket->loop, &socket->write_watcher); \
-      }                                                     \
-}             
+  {                                                         \
+    if(GNUTLS_NEED_WRITE) {                                 \
+      ev_io_start (socket->loop, &socket->write_watcher);   \
+      ev_io_stop  (socket->loop, &socket->read_watcher );   \
+    } else {                                                \
+      ev_io_start (socket->loop, &socket->read_watcher );   \
+      ev_io_stop  (socket->loop, &socket->write_watcher);   \
+    }                                                       \
+  }             
 
 #endif
 
@@ -157,9 +157,8 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
   }
 #endif /* HAVE_GNUTLS */
 
-  ev_io_set(&socket->write_watcher, fd, EV_WRITE);
-  ev_io_set(&socket->read_watcher,  fd, EV_READ);
-  ev_io_set(&socket->error_watcher, fd, EV_ERROR);
+  ev_io_set(&socket->write_watcher, fd, EV_ERROR | EV_WRITE);
+  ev_io_set(&socket->read_watcher,  fd, EV_ERROR | EV_READ);
 
   oi_socket_attach(socket, loop);
 }
@@ -386,21 +385,7 @@ on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
     socket->on_timeout(socket);
   }
 
-  oi_socket_schedule_close(socket);
-}
-
-static void 
-on_error(struct ev_loop *loop, ev_io *watcher, int revents)
-{
-  oi_socket *socket = watcher->data;
-  assert(watcher == &socket->write_watcher);
-  assert(revents == EV_ERROR);
-
-  oi_error("error on socket");
-  if(socket->on_error) {
-    socket->on_error(socket, OI_LOOP_ERROR, 0);
-  }
-  close_socket(socket);
+  oi_socket_close(socket);
 }
 
 static void
@@ -448,7 +433,7 @@ secure_socket_send(oi_socket *socket)
   if(sent <= 0) {
     if(gnutls_error_is_fatal(sent))  {
       oi_error("close socket on write.");
-      oi_socket_schedule_close(socket);
+      oi_socket_close(socket);
     }
     if(sent == GNUTLS_E_INTERRUPTED || sent == GNUTLS_E_AGAIN)
       GNUTLS_SET_DIRECTION(socket);
@@ -563,7 +548,7 @@ socket_send(oi_socket *socket)
 
   if(sent < 0) {
     oi_error("close socket on write.");
-    oi_socket_schedule_close(socket);
+    oi_socket_close(socket);
     return;
   }
   if(sent == 0) return; /* XXX is this the right action? */
@@ -589,13 +574,13 @@ socket_recv(oi_socket *socket)
       case EAGAIN: return;
       default:
         perror("recv()");
-        oi_socket_schedule_close(socket);
+        oi_socket_close(socket);
         return;
     }
   }
   if(recved == 0)  {
     /* TODO callback? for half-closed connections? */
-    oi_socket_schedule_close(socket);
+    oi_socket_close(socket);
     return;
   }
 
@@ -606,17 +591,21 @@ socket_recv(oi_socket *socket)
   }
 }
 
+
 /* Internal callback. called by socket->read_watcher */
 static void 
-on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
+on_io_event(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   oi_socket *socket = watcher->data;
 
- // printf("on_readable\n");
-
-  //assert(ev_is_active(&socket->timeout_watcher)); // TODO -- why is this broken?
-  assert(watcher == &socket->read_watcher);
-  assert(revents == EV_READ);
+  if(revents & EV_ERROR) {
+    oi_error("error on socket");
+    if(socket->on_error) {
+      socket->on_error(socket, OI_LOOP_ERROR, 0);
+    }
+    close_socket(socket);
+    return;
+  }
 
   if(socket->secure) {
     switch(socket->state) {
@@ -624,7 +613,8 @@ on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
       secure_handshake(socket); 
       break;
     case OI_OPENED:    
-      secure_socket_recv(socket);           
+      if(revents & EV_READ)  secure_socket_recv(socket);           
+      if(revents & EV_WRITE) secure_socket_send(socket);           
       break;
     case OI_CLOSING: 
       secure_goodbye(socket);   
@@ -639,57 +629,14 @@ on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
       if(socket->on_connect)
         socket->on_connect(socket);
     case OI_OPENED:    
-      socket_recv(socket);
+      if(revents & EV_READ)  socket_recv(socket);           
+      if(revents & EV_WRITE) socket_send(socket);           
       break;
     case OI_CLOSING: 
       close_socket(socket);
       break;
     default: 
       assert(0 && "Should not recv data when the socket is OI_CLOSED");
-    }
-  }
-}
-
-/* Internal callback. called by socket->write_watcher */
-static void 
-on_writable(struct ev_loop *loop, ev_io *watcher, int revents)
-{
-  oi_socket *socket = watcher->data;
-  
- // printf("on_writable\n");
-
-  assert(revents == EV_WRITE);
-//  assert(ev_is_active(&socket->timeout_watcher)); // TODO -- why is this broken?
-  assert(watcher == &socket->write_watcher);
-
-  if(socket->secure) {
-    switch(socket->state) {
-    case OI_OPENING: 
-      secure_handshake(socket); 
-      break;
-    case OI_OPENED:    
-      secure_socket_send(socket);           
-      break;
-    case OI_CLOSING: 
-      secure_goodbye(socket);   
-      break;
-    default: 
-      assert(0 && "Should not send data when the secure socket is OI_CLOSED");
-    }
-  } else {
-    switch(socket->state) {
-    case OI_OPENING: 
-      socket->state = OI_OPENED;
-      if(socket->on_connect)
-        socket->on_connect(socket);
-    case OI_OPENED:    
-      socket_send(socket);
-      break;
-    case OI_CLOSING: 
-      close_socket(socket);
-      break;
-    default: 
-      assert(0 && "Should not send data when the socket is OI_CLOSED");
     }
   }
 }
@@ -710,20 +657,18 @@ oi_socket_init(oi_socket *socket, float timeout)
   socket->write_buffer = NULL;
   socket->state = OI_CLOSED;
 
-  ev_init (&socket->write_watcher, on_writable);
+  ev_init (&socket->write_watcher, on_io_event);
   socket->write_watcher.data = socket;
 
-  ev_init(&socket->read_watcher, on_readable);
+  ev_init(&socket->read_watcher, on_io_event);
   socket->read_watcher.data = socket;
-
-  ev_init(&socket->error_watcher, on_error);
-  socket->error_watcher.data = socket;
 
   socket->secure = FALSE;
 #ifdef HAVE_GNUTLS
   socket->session = NULL;
 #endif 
 
+  /* TODO higher resolution timer */
   ev_timer_init(&socket->timeout_watcher, on_timeout, timeout, 0.);
   socket->timeout_watcher.data = socket;  
 
@@ -735,7 +680,7 @@ oi_socket_init(oi_socket *socket, float timeout)
 }
 
 void 
-oi_socket_schedule_close (oi_socket *socket)
+oi_socket_close (oi_socket *socket)
 {
   socket->state = OI_CLOSING;
   /* cannot simply call close_socket() here because that would 
@@ -798,7 +743,6 @@ oi_socket_attach(oi_socket *socket, struct ev_loop *loop)
 {
   socket->loop = loop;
   ev_timer_start(loop, &socket->timeout_watcher);
-  ev_io_start(loop, &socket->error_watcher);
   ev_io_start(loop, &socket->read_watcher);
   ev_io_start(loop, &socket->write_watcher);
 }
@@ -808,7 +752,6 @@ oi_socket_detach(oi_socket *socket)
 {
   ev_io_stop(socket->loop, &socket->write_watcher);
   ev_io_stop(socket->loop, &socket->read_watcher);
-  ev_io_stop(socket->loop, &socket->error_watcher);
   ev_timer_stop(socket->loop, &socket->timeout_watcher);
   socket->loop = NULL;
 }
@@ -868,9 +811,8 @@ oi_socket_open_tcp (oi_socket *s, const char *host, int port)
   s->fd = fd;
   s->state = OI_OPENING;
 
-  ev_io_set (&s->read_watcher, fd, EV_READ);
-  ev_io_set (&s->write_watcher, fd, EV_WRITE);
-  ev_io_set (&s->error_watcher, fd, EV_ERROR);
+  ev_io_set (&s->read_watcher, fd, EV_ERROR | EV_READ);
+  ev_io_set (&s->write_watcher, fd, EV_ERROR | EV_WRITE);
 
   if(s->secure) {
     set_transport_gnutls(s);
@@ -920,9 +862,8 @@ oi_socket_open_unix (oi_socket *s, const char *socketfile)
   s->fd = fd;
   s->state = OI_OPENING;
 
-  ev_io_set (&s->read_watcher, fd, EV_READ);
-  ev_io_set (&s->write_watcher, fd, EV_WRITE);
-  ev_io_set (&s->error_watcher, fd, EV_ERROR);
+  ev_io_set (&s->read_watcher, fd, EV_ERROR | EV_READ);
+  ev_io_set (&s->write_watcher, fd, EV_ERROR | EV_WRITE);
 
   if(s->secure) {
     set_transport_gnutls(s);

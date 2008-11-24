@@ -34,17 +34,20 @@ void oi_server_detach             (oi_server *);
 void oi_server_close              (oi_server *); 
 
 void oi_socket_init               (oi_socket *, float timeout);
+// TODO
+// int oi_socket_open_stdio         (oi_socket *); 
+// int oi_socket_open_stderr        (oi_socket *); 
+// int oi_socket_open_pair       (oi_socket *a, oi_socket *b);
  int oi_socket_open_tcp           (oi_socket *, const char *host, int port); 
  int oi_socket_open_unix          (oi_socket *, const char *socketfile);
-// int oi_socket_open_pair       (oi_socket *a, oi_socket *b); /* TODO socket pairs */
 void oi_socket_attach             (oi_socket *, struct ev_loop *loop);
 void oi_socket_detach             (oi_socket *);
 void oi_socket_read_stop          (oi_socket *);
 void oi_socket_read_start         (oi_socket *); /* TODO set chunksize */
 void oi_socket_reset_timeout      (oi_socket *);
-void oi_socket_schedule_close     (oi_socket *);
 void oi_socket_write              (oi_socket *, oi_buf *);
 void oi_socket_write_simple       (oi_socket *, const char *str, size_t len);
+void oi_socket_close              (oi_socket *);
 #ifdef HAVE_GNUTLS
 void oi_socket_set_secure_session (oi_socket *, gnutls_session_t);
 #endif 
@@ -64,7 +67,6 @@ struct oi_server {
 
 /* private */
   ev_io connection_watcher;
-  ev_io error_watcher;
 
 /* public */
   oi_socket* (*on_connection) (oi_server *, struct sockaddr *, socklen_t);
@@ -85,7 +87,6 @@ struct oi_socket {
   union oi_address local_address;
 
 /* private */  
-  ev_io error_watcher;
   ev_io write_watcher;
   ev_io read_watcher;
   ev_timer timeout_watcher;
