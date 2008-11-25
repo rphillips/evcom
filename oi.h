@@ -11,16 +11,9 @@
 # include <gnutls/gnutls.h>
 #endif
 
-/* socket state */
-#define OI_CLOSED    1
-#define OI_OPENING   2
-#define OI_OPENED    3 
-#define OI_CLOSING   4
-
-#define OI_HANDSHAKE_ERROR    1 /* code is a GnuTLS error code */
-#define OI_BYE_ERROR          2 /* code is a GnuTLS error code */
-#define OI_NONBLOCKING_ERROR  3 /* code is fcntl() */
-#define OI_LOOP_ERROR         4 /* code is always 0 */
+#define OI_OKAY    0
+#define OI_AGAIN   1
+#define OI_ERROR   2 
 
 typedef struct oi_buf     oi_buf;
 typedef struct oi_server  oi_server;
@@ -77,11 +70,16 @@ struct oi_server {
 struct oi_socket {
 /* read only */
   int fd;
-  int state;
   struct ev_loop *loop;
   oi_server *server;
   oi_buf *write_buffer;
   size_t written;
+
+  unsigned connected:1;
+
+  /* if these are NULL then it means that end of the socket is closed. */
+  int (*read_action)  (oi_socket *);
+  int (*write_action) (oi_socket *);
 
   union oi_address remote_address;
   union oi_address local_address;
@@ -92,6 +90,7 @@ struct oi_socket {
   ev_timer timeout_watcher;
 
   unsigned secure:1;
+  unsigned wait_for_secure_hangup:1;
 #ifdef HAVE_GNUTLS
   gnutls_session_t session;
 #endif
@@ -100,7 +99,7 @@ struct oi_socket {
   void (*on_connect)   (oi_socket *);
   void (*on_read)      (oi_socket *, const void *buf, size_t count);
   void (*on_drain)     (oi_socket *);
-  void (*on_error)     (oi_socket *, int domain, int code);
+  void (*on_error)     (oi_socket *);
   void (*on_close)     (oi_socket *);
   void (*on_timeout)   (oi_socket *);
   void *data;

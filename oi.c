@@ -27,23 +27,67 @@
 # include <gnutls/gnutls.h>
 # define GNUTLS_NEED_WRITE (gnutls_record_get_direction(socket->session) == 1)
 # define GNUTLS_NEED_READ (gnutls_record_get_direction(socket->session) == 0)
-# define GNUTLS_SET_DIRECTION(socket)                       \
-  {                                                         \
-    if(GNUTLS_NEED_WRITE) {                                 \
-      ev_io_start (socket->loop, &socket->write_watcher);   \
-      ev_io_stop  (socket->loop, &socket->read_watcher );   \
-    } else {                                                \
-      ev_io_start (socket->loop, &socket->read_watcher );   \
-      ev_io_stop  (socket->loop, &socket->write_watcher);   \
-    }                                                       \
-  }             
-
 #endif
 
-#define is_inet_address(address) (address.in.sun_family == AF_INET)
+static int 
+full_close(oi_socket *socket)
+{
+  if(-1 == close(socket->fd) && errno == EINTR) {
+    /* TODO fd still open. next loop call close again? */
+    assert(0);  
+  }
+
+  socket->read_action = NULL;
+  socket->write_action = NULL;
+
+  /* TODO set timer to zero/idle watcher?  so we get a callback soon */
+  return OI_OKAY;
+}
+
+static int 
+half_close(oi_socket *socket)
+{
+  int r = shutdown(socket->fd, SHUT_WR);
+
+  if(r == -1)
+    return OI_ERROR;
+
+  socket->write_action = NULL;
+
+  /* TODO set timer to zero  so we get a callback soon */
+  return OI_OKAY;
+}
+
+
+
+static void
+update_write_buffer_after_send(oi_socket *socket, ssize_t sent)
+{
+  oi_buf *to_write = socket->write_buffer;
+  to_write->written += sent;
+  socket->written += sent;
+
+  if(to_write->written == to_write->len) {
+
+    socket->write_buffer = to_write->next;
+
+    if(to_write->release) {
+      to_write->release(to_write);
+    }  
+
+    if(socket->write_buffer == NULL) {
+      ev_io_stop(socket->loop, &socket->write_watcher);
+      if(socket->on_drain)
+        socket->on_drain(socket);
+    }
+  }
+}
 
 
 #ifdef HAVE_GNUTLS
+static int secure_socket_send(oi_socket *socket);
+static int secure_socket_recv(oi_socket *socket);
+
 static ssize_t 
 nosigpipe_push(gnutls_transport_ptr_t data, const void *buf, size_t len)
 {
@@ -66,6 +110,176 @@ nosigpipe_push(gnutls_transport_ptr_t data, const void *buf, size_t len)
   return r;
 }
 
+static int
+secure_handshake(oi_socket *socket)
+{
+  assert(socket->secure);
+
+  int r = gnutls_handshake(socket->session);
+
+  if(gnutls_error_is_fatal(r))
+    return OI_ERROR;
+
+  if(r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN)
+    return OI_AGAIN;
+
+  oi_socket_reset_timeout(socket);
+
+  if(!socket->connected && socket->on_connect)
+    socket->on_connect(socket);
+  socket->connected = TRUE;
+
+  if(socket->read_action)
+    socket->read_action = secure_socket_recv;
+ 
+  if(socket->write_action)
+    socket->write_action = secure_socket_send;
+
+  return OI_OKAY;
+}
+
+static int
+secure_socket_send(oi_socket *socket)
+{
+  ssize_t sent;
+  oi_buf *to_write = socket->write_buffer;
+
+  assert(socket->secure);
+
+  if(to_write == NULL) {
+    ev_io_stop(socket->loop, &socket->write_watcher);
+    return OI_OKAY;
+  }
+
+  sent = gnutls_record_send( socket->session
+                           , to_write->base + to_write->written
+                           , to_write->len - to_write->written
+                           ); 
+
+  if(gnutls_error_is_fatal(sent)) 
+    return OI_ERROR;
+
+  if(sent == 0)
+    return OI_AGAIN;
+
+  oi_socket_reset_timeout(socket);
+
+  if(sent == GNUTLS_E_INTERRUPTED || sent == GNUTLS_E_AGAIN) {
+    if(GNUTLS_NEED_READ) {
+      if(socket->read_action) {
+        socket->read_action = secure_socket_send;
+      } else {
+        /* GnuTLS needs read but already got EOF */
+        return OI_ERROR;
+      }
+    }
+    return OI_AGAIN;
+  }
+
+  if(sent > 0) {
+    /* make sure the callbacks are correct */
+    if(socket->read_action)
+      socket->read_action = secure_socket_recv;
+    update_write_buffer_after_send(socket, sent);
+    return OI_OKAY;
+  }
+
+  return OI_ERROR;
+}
+
+static int
+secure_socket_recv(oi_socket *socket)
+{
+  char recv_buffer[TCP_MAXWIN];
+  size_t recv_buffer_size = TCP_MAXWIN;
+  ssize_t recved;
+
+  assert(socket->secure);
+
+  recved = gnutls_record_recv(socket->session, recv_buffer, recv_buffer_size);
+
+  if(gnutls_error_is_fatal(recved)) 
+    return OI_ERROR;
+
+  if(recved == GNUTLS_E_INTERRUPTED || recved == GNUTLS_E_AGAIN)  {
+    if(GNUTLS_NEED_WRITE) {
+      if(socket->write_action) {
+        socket->write_action = secure_socket_recv;
+      } else {
+        /* GnuTLS needs send but already closed write end */
+        return OI_ERROR;
+      }
+    }
+    return OI_AGAIN;
+  }
+
+  oi_socket_reset_timeout(socket);
+
+  /* A server may also receive GNUTLS_E_REHANDSHAKE when a client has
+   * initiated a handshake. In that case the server can only initiate a
+   * handshake or terminate the connection. */
+  if(recved == GNUTLS_E_REHANDSHAKE) {
+    if(socket->write_action) {
+      socket->read_action = secure_handshake;
+      socket->write_action = secure_handshake;
+      return OI_OKAY;
+    } else {
+      return OI_ERROR;
+    }
+  }
+
+  if(recved >= 0) {
+    /* Got EOF */
+    if(recved == 0)
+      socket->read_action = NULL;
+
+    if(socket->write_action) 
+      socket->write_action = secure_socket_send;
+
+    if(socket->on_read) { socket->on_read(socket, recv_buffer, recved); }
+
+    return OI_OKAY;
+  }
+
+  return OI_ERROR;
+}
+
+static int
+secure_goodbye(oi_socket *socket, gnutls_close_request_t how)
+{
+  assert(socket->secure);
+
+  int r = gnutls_bye(socket->session, how);
+
+  if(gnutls_error_is_fatal(r)) 
+    return OI_ERROR;
+
+  if(r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN)
+    return OI_AGAIN;
+
+  return OI_OKAY;
+}
+
+static int
+secure_full_goodbye(oi_socket *socket)
+{
+  int r = secure_goodbye(socket, GNUTLS_SHUT_RDWR);
+  if(OI_OKAY == r) {
+    return full_close(socket);
+  }
+  return r;
+}
+
+static int
+secure_half_goodbye(oi_socket *socket)
+{
+  int r = secure_goodbye(socket, GNUTLS_SHUT_WR);
+  if(OI_OKAY == r) {
+    return half_close(socket);
+  }
+  return r;
+}
+
 static void
 set_transport_gnutls(oi_socket *socket)
 {
@@ -76,6 +290,8 @@ set_transport_gnutls(oi_socket *socket)
                             , (gnutls_transport_ptr_t)socket->fd /*recv*/
                             , socket /* send */
                             );
+  socket->read_action = secure_handshake;
+  socket->write_action = secure_handshake;
 }
 
 /* Tells the socket to use transport layer security (SSL). liboi does not
@@ -93,6 +309,110 @@ oi_socket_set_secure_session (oi_socket *socket, gnutls_session_t session)
   socket->secure = TRUE;
 }
 #endif /* HAVE GNUTLS */
+
+static int
+socket_send(oi_socket *socket)
+{
+  ssize_t sent;
+  oi_buf *to_write = socket->write_buffer;
+
+  assert(socket->secure == FALSE);
+
+  if(!socket->connected) {
+    if(socket->on_connect) { socket->on_connect(socket); }
+    socket->connected = TRUE;
+    return OI_OKAY;
+  }
+
+  if(to_write == NULL) {
+    ev_io_stop(socket->loop, &socket->write_watcher);
+    return OI_OKAY;
+  }
+
+  
+  int flags = 0;
+#ifdef MSG_NOSIGNAL
+  flags |= MSG_NOSIGNAL;
+#endif
+#ifdef MSG_DONTWAIT
+  flags |= MSG_DONTWAIT;
+#endif
+
+  /* TODO use writev() here */
+
+  sent = send( socket->fd
+             , to_write->base + to_write->written
+             , to_write->len - to_write->written
+             , flags
+             );
+
+  if(sent < 0) {
+    switch(errno) {
+      case EAGAIN:
+        return OI_AGAIN;
+
+      case ECONNRESET:
+        socket->write_action = NULL;
+        return OI_ERROR;
+
+      default:
+        perror("send()");
+        assert(0 && "oi shouldn't let this happen.");
+    }
+  }
+
+  oi_socket_reset_timeout(socket);
+  update_write_buffer_after_send(socket, sent);
+
+  return OI_OKAY;
+}
+
+static int
+socket_recv(oi_socket *socket)
+{
+  char buf[TCP_MAXWIN];
+  size_t buf_size = TCP_MAXWIN;
+  ssize_t recved;
+
+  assert(socket->secure == FALSE);
+
+  if(!socket->connected) {
+    if(socket->on_connect) { socket->on_connect(socket); }
+    socket->connected = TRUE;
+    return OI_OKAY;
+  }
+
+  recved = recv(socket->fd, buf, buf_size, 0);
+
+  if(recved < 0) {
+    switch(errno) {
+      case EAGAIN: 
+      case EINTR:  
+        return OI_AGAIN;
+
+      /* A remote host refused to allow the network connection (typically
+       * because it is not running the requested service). */
+      case ECONNREFUSED:
+        return OI_ERROR; 
+
+      default:
+        perror("recv()");
+        assert(0 && "recv returned error that oi should have caught before.");
+    }
+  }
+
+  oi_socket_reset_timeout(socket);
+
+  if(recved == 0) {
+    oi_socket_read_stop(socket);
+    socket->read_action = NULL;
+  }
+
+  /* NOTE: EOF is signaled with recved == 0 on callback */
+  if(socket->on_read) { socket->on_read(socket, buf, recved); }
+
+  return OI_OKAY;
+}
 
 
 /* Internal callback 
@@ -147,9 +467,11 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
 #endif
 
   socket->fd = fd;
-  socket->state = OI_OPENING;
   socket->server = server;
   memcpy(&socket->remote_address, &address, addr_len);
+
+  socket->read_action = socket_recv;
+  socket->write_action = socket_send;
 
 #ifdef HAVE_GNUTLS
   if(socket->secure) {
@@ -352,23 +674,6 @@ oi_server_init(oi_server *server, int max_connections)
   server->data = NULL;
 }
 
-static void 
-close_socket(oi_socket *socket)
-{
-  oi_socket_detach(socket);
-
-  if(0 > close(socket->fd))
-    oi_error("problem closing socket fd");
-
-  socket->state = OI_CLOSED;
-
-  if(socket->on_close)
-    socket->on_close(socket);
-  /* No access to the socket past this point! 
-   * The user is allowed to free in the callback
-   */
-}
-
 /* Internal callback 
  * called by socket->timeout_watcher
  */
@@ -381,216 +686,15 @@ on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
 
  // printf("on_timeout\n");
 
-  if(socket->on_timeout) {
-    socket->on_timeout(socket);
-  }
+  if(socket->on_timeout) { socket->on_timeout(socket); }
 
-  oi_socket_close(socket);
-}
 
-static void
-update_write_buffer_after_send(oi_socket *socket, ssize_t sent)
-{
-  oi_buf *to_write = socket->write_buffer;
-  to_write->written += sent;
-  socket->written += sent;
-
-  if(to_write->written == to_write->len) {
-
-    socket->write_buffer = to_write->next;
-
-    if(to_write->release) {
-      to_write->release(to_write);
-    }  
-
-    if(socket->write_buffer == NULL) {
-      ev_io_stop(socket->loop, &socket->write_watcher);
-      if(socket->on_drain)
-        socket->on_drain(socket);
-    }
-  }
+  /* TODD set timer to zero */
+  full_close(socket);
 }
 
 #ifdef HAVE_GNUTLS
-static void
-secure_socket_send(oi_socket *socket)
-{
-  ssize_t sent;
-  oi_buf *to_write = socket->write_buffer;
-
-  if(to_write == NULL) {
-    ev_io_stop(socket->loop, &socket->write_watcher);
-    return;
-  }
-
-  assert(socket->secure);
-  assert(socket->state == OI_OPENED);
-
-  sent = gnutls_record_send( socket->session
-                           , to_write->base + to_write->written
-                           , to_write->len - to_write->written
-                           ); 
-  if(sent <= 0) {
-    if(gnutls_error_is_fatal(sent))  {
-      oi_error("close socket on write.");
-      oi_socket_close(socket);
-    }
-    if(sent == GNUTLS_E_INTERRUPTED || sent == GNUTLS_E_AGAIN)
-      GNUTLS_SET_DIRECTION(socket);
-    return; 
-  }
-  oi_socket_reset_timeout(socket);
-  update_write_buffer_after_send(socket, sent);
-}
-
-static void
-secure_socket_recv(oi_socket *socket)
-{
-  char recv_buffer[TCP_MAXWIN];
-  size_t recv_buffer_size = TCP_MAXWIN;
-  ssize_t recved;
-
-  assert(socket->secure);
-  assert(socket->state == OI_OPENED);
-
-  recved = gnutls_record_recv(socket->session, recv_buffer, recv_buffer_size);
-  if(recved <= 0) {
-    if( gnutls_error_is_fatal(recved) ) 
-      // TODO: on_error and close_socket()
-      close_socket(socket);
-    if( recved == GNUTLS_E_INTERRUPTED || recved == GNUTLS_E_AGAIN) 
-      GNUTLS_SET_DIRECTION(socket);
-    return; 
-  }
-  oi_socket_reset_timeout(socket);
-  if(socket->on_read) {
-    socket->on_read(socket, recv_buffer, recved);
-  }
-}
-
-static void
-secure_handshake(oi_socket *socket)
-{
-  assert(socket->secure);
-
-  int r = gnutls_handshake(socket->session);
-  if(r < 0) {
-    if(r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN)
-      GNUTLS_SET_DIRECTION(socket);
-    if(gnutls_error_is_fatal(r)) {
-      if(socket->on_error) {
-        socket->on_error(socket, OI_HANDSHAKE_ERROR, r);
-      }
-      close_socket(socket);
-    }
-    return;
-  }
-  oi_socket_reset_timeout(socket);
-
-  socket->state = OI_OPENED;
-  if(socket->on_connect)
-    socket->on_connect(socket);
-
-  if(socket->write_buffer != NULL)
-    ev_io_start(socket->loop, &socket->write_watcher);
-}
-
-static void
-secure_goodbye(oi_socket *socket)
-{
-  assert(socket->secure);
-
-  int r = gnutls_bye(socket->session, GNUTLS_SHUT_RDWR);
-  if(r < 0) {
-    if(r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN)
-      GNUTLS_SET_DIRECTION(socket);
-    if(gnutls_error_is_fatal(r)) 
-      if(socket->on_error) {
-        socket->on_error(socket, OI_BYE_ERROR, r);
-      }
-      goto die;
-    return;
-  }
-
-die:
-  close_socket(socket);
-}
 #endif /* HAVE_GNUTLS */
-
-static void
-socket_send(oi_socket *socket)
-{
-  ssize_t sent;
-  oi_buf *to_write = socket->write_buffer;
-
-  if(to_write == NULL) {
-    ev_io_stop(socket->loop, &socket->write_watcher);
-    return;
-  }
-
-  assert(socket->secure == FALSE);
-  assert(socket->state == OI_OPENED || socket->state == OI_OPENING);
-  
-  int flags = 0;
-#ifdef MSG_NOSIGNAL
-  flags |= MSG_NOSIGNAL;
-#endif
-#ifdef MSG_DONTWAIT
-  flags |= MSG_DONTWAIT;
-#endif
-
-  /* TODO use writev() here */
-  sent = send( socket->fd
-             , to_write->base + to_write->written
-             , to_write->len - to_write->written
-             , flags
-             );
-
-  if(sent < 0) {
-    oi_error("close socket on write.");
-    oi_socket_close(socket);
-    return;
-  }
-  if(sent == 0) return; /* XXX is this the right action? */
-
-  oi_socket_reset_timeout(socket);
-  update_write_buffer_after_send(socket, sent);
-}
-
-static void
-socket_recv(oi_socket *socket)
-{
-  char buf[TCP_MAXWIN];
-  size_t buf_size = TCP_MAXWIN;
-  ssize_t recved;
-
-  assert(socket->secure == FALSE);
-  assert(socket->state == OI_OPENED || socket->state == OI_OPENING);
-
-  recved = recv(socket->fd, buf, buf_size, 0);
-
-  if(recved < 0) {
-    switch(errno) {
-      case EAGAIN: return;
-      default:
-        perror("recv()");
-        oi_socket_close(socket);
-        return;
-    }
-  }
-  if(recved == 0)  {
-    /* TODO callback? for half-closed connections? */
-    oi_socket_close(socket);
-    return;
-  }
-
-  oi_socket_reset_timeout(socket);
-
-  if(socket->on_read) {
-    socket->on_read(socket, buf, recved);
-  }
-}
-
 
 /* Internal callback. called by socket->read_watcher */
 static void 
@@ -598,47 +702,43 @@ on_io_event(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   oi_socket *socket = watcher->data;
 
-  if(revents & EV_ERROR) {
-    oi_error("error on socket");
-    if(socket->on_error) {
-      socket->on_error(socket, OI_LOOP_ERROR, 0);
-    }
-    close_socket(socket);
-    return;
-  }
+  if(revents & EV_ERROR)
+    goto error;
 
-  if(socket->secure) {
-    switch(socket->state) {
-    case OI_OPENING: 
-      secure_handshake(socket); 
-      break;
-    case OI_OPENED:    
-      if(revents & EV_READ)  secure_socket_recv(socket);           
-      if(revents & EV_WRITE) secure_socket_send(socket);           
-      break;
-    case OI_CLOSING: 
-      secure_goodbye(socket);   
-      break;
-    default: 
-      assert(0 && "Should not recv data when the secure socket is OI_CLOSED");
+  int r;
+  int have_read_event = revents & EV_READ;
+  int have_write_event = revents & EV_WRITE;
+
+  //while(have_read_event || have_write_event) {
+
+    if(have_read_event && socket->read_action) {
+      r = socket->read_action(socket);
+      if(r == OI_ERROR) goto error;
+      if(r == OI_AGAIN) have_read_event = FALSE;
     }
-  } else {
-    switch(socket->state) {
-    case OI_OPENING: 
-      socket->state = OI_OPENED;
-      if(socket->on_connect)
-        socket->on_connect(socket);
-    case OI_OPENED:    
-      if(revents & EV_READ)  socket_recv(socket);           
-      if(revents & EV_WRITE) socket_send(socket);           
-      break;
-    case OI_CLOSING: 
-      close_socket(socket);
-      break;
-    default: 
-      assert(0 && "Should not recv data when the socket is OI_CLOSED");
+
+    if(have_write_event && socket->write_action) {
+      r = socket->write_action(socket);
+      if(r == OI_ERROR) goto error;
+      if(r == OI_AGAIN) have_write_event = FALSE;
     }
-  }
+
+  //}
+
+  if(socket->write_action == NULL && socket->read_action == NULL)
+    goto close;
+
+  return;
+
+error:
+  if(socket->on_error) { socket->on_error(socket); }
+
+close:
+  /* TODO drop write buf */
+  oi_socket_detach(socket);
+  if(socket->on_close) { socket->on_close(socket); }
+  /* WARNING: user can free socket in on_close so no more 
+   * access beyond this point. */
 }
 
 /**
@@ -655,7 +755,7 @@ oi_socket_init(oi_socket *socket, float timeout)
   socket->server = NULL;
   socket->loop = NULL;
   socket->write_buffer = NULL;
-  socket->state = OI_CLOSED;
+  socket->connected = FALSE;
 
   ev_init (&socket->write_watcher, on_io_event);
   socket->write_watcher.data = socket;
@@ -664,6 +764,7 @@ oi_socket_init(oi_socket *socket, float timeout)
   socket->read_watcher.data = socket;
 
   socket->secure = FALSE;
+  socket->wait_for_secure_hangup = FALSE;
 #ifdef HAVE_GNUTLS
   socket->session = NULL;
 #endif 
@@ -671,6 +772,9 @@ oi_socket_init(oi_socket *socket, float timeout)
   /* TODO higher resolution timer */
   ev_timer_init(&socket->timeout_watcher, on_timeout, timeout, 0.);
   socket->timeout_watcher.data = socket;  
+
+  socket->read_action = NULL;
+  socket->write_action = NULL;
 
   socket->on_connect = NULL;
   socket->on_read = NULL;
@@ -680,16 +784,50 @@ oi_socket_init(oi_socket *socket, float timeout)
 }
 
 void 
+oi_socket_write_eof (oi_socket *socket)
+{
+  /* try to hang up properly for secure connections */
+  if( socket->secure 
+   && socket->connected /* completed handshake */ 
+   && socket->write_action /* write end is open */
+    ) 
+  {
+    socket->write_action = secure_half_goodbye;
+    if(socket->loop)
+      ev_io_start(socket->loop, &socket->write_watcher);
+    return;
+  }
+
+  if(socket->write_action)
+    half_close(socket);
+  else
+    full_close(socket);
+}
+
+void 
 oi_socket_close (oi_socket *socket)
 {
-  socket->state = OI_CLOSING;
-  /* cannot simply call close_socket() here because that would 
-   * invoke the socket->on_close() which may free the socket.
-   * instead we must return the event loop and close on the 
-   * next cycle. If the socket is secure, we have to do the
-   * goodbye exchange.
-   */
-  ev_feed_event(socket->loop, &socket->write_watcher, EV_WRITE);
+  /* try to hang up properly for secure connections */
+  if( socket->secure 
+   && socket->connected /* completed handshake */ 
+   && socket->write_action /* write end is open */
+    ) 
+  {
+    if(socket->wait_for_secure_hangup && socket->read_action) {
+      socket->write_action = secure_full_goodbye;
+      socket->read_action = secure_full_goodbye;
+    } else {
+      socket->write_action = secure_half_goodbye;
+      socket->read_action = NULL;
+    }
+
+    if(socket->loop)
+      ev_io_start(socket->loop, &socket->write_watcher);
+
+    return;
+  }
+
+  full_close(socket);
 }
 
 /* 
@@ -710,18 +848,21 @@ oi_socket_write(oi_socket *socket, oi_buf *buf)
 {
   oi_buf *n;
 
+  if(socket->write_action == NULL)
+    return;
+
   /* ugly */
   if(socket->write_buffer == NULL) {
     socket->write_buffer = buf;
   } else {
-    for(n = socket->write_buffer; n->next; n = n->next) {;} /* TODO O(N) should be O(1) */
+    /* TODO O(N) should be O(1) */
+    for(n = socket->write_buffer; n->next; n = n->next) {;} 
     n->next = buf;
   }
 
   buf->written = 0;
   buf->next = NULL;
-  if(socket->state == OI_OPENED)
-    ev_io_start(socket->loop, &socket->write_watcher);
+  ev_io_start(socket->loop, &socket->write_watcher);
 }
 
 /* Writes a string to the socket. 
@@ -742,9 +883,14 @@ void
 oi_socket_attach(oi_socket *socket, struct ev_loop *loop)
 {
   socket->loop = loop;
+
   ev_timer_start(loop, &socket->timeout_watcher);
-  ev_io_start(loop, &socket->read_watcher);
-  ev_io_start(loop, &socket->write_watcher);
+
+  if(socket->read_action) 
+    ev_io_start(loop, &socket->read_watcher);
+
+  if(socket->write_action) 
+    ev_io_start(loop, &socket->write_watcher);
 }
 
 void
@@ -765,7 +911,9 @@ oi_socket_read_stop (oi_socket *socket)
 void
 oi_socket_read_start (oi_socket *socket)
 {
-  ev_io_start(socket->loop, &socket->read_watcher);
+  if(socket->read_action) {
+    ev_io_start(socket->loop, &socket->read_watcher);
+  }
 }
 
 /* for now host is only allowed to be an IP address */
@@ -809,10 +957,12 @@ oi_socket_open_tcp (oi_socket *s, const char *host, int port)
   }
 
   s->fd = fd;
-  s->state = OI_OPENING;
 
   ev_io_set (&s->read_watcher, fd, EV_ERROR | EV_READ);
   ev_io_set (&s->write_watcher, fd, EV_ERROR | EV_WRITE);
+
+  s->read_action = socket_recv;
+  s->write_action = socket_send;
 
   if(s->secure) {
     set_transport_gnutls(s);
@@ -860,22 +1010,17 @@ oi_socket_open_unix (oi_socket *s, const char *socketfile)
   }
 
   s->fd = fd;
-  s->state = OI_OPENING;
 
   ev_io_set (&s->read_watcher, fd, EV_ERROR | EV_READ);
   ev_io_set (&s->write_watcher, fd, EV_ERROR | EV_WRITE);
+
+  s->read_action = socket_recv;
+  s->write_action = socket_send;
 
   if(s->secure) {
     set_transport_gnutls(s);
   }
 
   return fd;
-}
-
-int
-oi_socket_open_pair (oi_socket *a, oi_socket *b)
-{
-  /* TODO */
-  return -1;
 }
 

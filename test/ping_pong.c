@@ -24,7 +24,7 @@ int successful_ping_count;
 static int is_secure = 0;
 
 #ifdef HAVE_GNUTLS
-#define DH_BITS 1024
+#define DH_BITS 768
 gnutls_anon_server_credentials_t server_credentials;
 const int kx_prio[] = { GNUTLS_KX_ANON_DH, 0 };
 static gnutls_dh_params_t dh_params;
@@ -39,38 +39,22 @@ on_peer_read(oi_socket *socket, const void *base, size_t len)
   char buf[200000];
   strncpy(buf, base, len);
   buf[len] = 0;
-  printf("server got message: %s\n", buf);
+  //printf("server got message: %s\n", buf);
 
   oi_socket_write_simple(socket, PONG, sizeof PONG);
 }
 
 static void 
-on_peer_error(oi_socket *socket, int domain, int code)
+on_peer_error(oi_socket *socket)
 {
   fprintf(stderr, "an error happend on the peer socket\n");
-  switch(domain) {
-    case OI_HANDSHAKE_ERROR:
-      fprintf(stderr, "handshake error: %d\n", code);
-      break;
-    case OI_BYE_ERROR:
-      fprintf(stderr, "bye error: %d\n", code);
-      break;
-  }
   exit(1);
 }
 
 static void 
-on_client_error(oi_socket *socket, int domain, int code)
+on_client_error(oi_socket *socket)
 {
   fprintf(stderr, "an error happend on the client socket\n");
-  switch(domain) {
-    case OI_HANDSHAKE_ERROR:
-      fprintf(stderr, "handshake error: %d\n", code);
-      break;
-    case OI_BYE_ERROR:
-      fprintf(stderr, "bye error: %d\n", code);
-      break;
-  }
   exit(1);
 }
 
@@ -83,7 +67,7 @@ on_peer_close(oi_socket *socket)
     gnutls_deinit(session);
   }
 #endif
-  printf("server connection closed\n");
+  //printf("server connection closed\n");
   free(socket);
 }
 
@@ -97,14 +81,14 @@ on_peer_timeout(oi_socket *socket)
 static void 
 on_client_close(oi_socket *socket)
 {
-  printf("client connection closed\n");
+  //printf("client connection closed\n");
   ev_unloop(socket->loop, EVUNLOOP_ALL);
 }
 
 static void 
 on_client_timeout(oi_socket *socket)
 {
-  printf("client connection timeout\n");
+  //printf("client connection timeout\n");
   exit(1);
 }
 
@@ -112,7 +96,7 @@ static oi_socket*
 on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
 {
   oi_socket *socket = malloc(sizeof(oi_socket));
-  oi_socket_init(socket, 3000.0);
+  oi_socket_init(socket, 5.0);
   socket->on_read = on_peer_read;
   socket->on_error = on_peer_error;
   socket->on_close = on_peer_close;
@@ -135,7 +119,7 @@ on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
   }
 #endif
 
-  printf("on server connection\n");
+  //printf("on server connection\n");
 
   return socket;
 }
@@ -143,7 +127,7 @@ on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
 static void 
 on_client_connect(oi_socket *socket)
 {
-  printf("client connected. sending ping\n");
+  //printf("client connected. sending ping\n");
   oi_socket_write_simple(socket, PING, sizeof PING);
 }
 
@@ -153,7 +137,7 @@ on_client_read(oi_socket *socket, const void *base, size_t len)
   char buf[200000];
   strncpy(buf, base, len);
   buf[len] = 0;
-  printf("client got message: %s\n", buf);
+  //printf("client got message: %s\n", buf);
   
   if(strcmp(buf, PONG) == 0) {
 
@@ -178,8 +162,8 @@ main(int argc, const char *argv[])
 
   int is_tcp = 1;
 
-  printf("sizeof(oi_server): %d\n", sizeof(oi_server));
-  printf("sizeof(oi_socket): %d\n", sizeof(oi_socket));
+  //printf("sizeof(oi_server): %d\n", sizeof(oi_server));
+  //printf("sizeof(oi_socket): %d\n", sizeof(oi_socket));
 
   if(argc >= 2 && strcmp(argv[1], "unix") == 0)
     is_tcp = 0;
@@ -195,7 +179,13 @@ main(int argc, const char *argv[])
     gnutls_global_init();
 
     gnutls_dh_params_init (&dh_params);
+
+    fprintf(stderr, "generating primes...");
+    fsync((int)stderr);
     gnutls_dh_params_generate2 (dh_params, DH_BITS);
+    fprintf(stderr, "done\n");
+    fsync((int)stderr);
+
     gnutls_anon_allocate_server_credentials (&server_credentials);
     gnutls_anon_set_server_dh_params (server_credentials, dh_params);
   }
@@ -203,7 +193,7 @@ main(int argc, const char *argv[])
 
   if(is_tcp) {
     r = oi_server_listen_tcp(&server, HOST, PORT);
-    printf("starting server on port 5000\n");
+    //printf("starting server on port 5000\n");
   } else {
     r = oi_server_listen_unix(&server, SOCKFILE, 0700);
   }
@@ -211,7 +201,7 @@ main(int argc, const char *argv[])
 
   oi_server_attach(&server, loop);
 
-  oi_socket_init(&client, 3000.0);
+  oi_socket_init(&client, 5.0);
   client.on_read    = on_client_read;
   client.on_error   = on_client_error;
   client.on_connect = on_client_connect;
@@ -232,14 +222,14 @@ main(int argc, const char *argv[])
 
     oi_socket_set_secure_session(&client, client_session);
 
-    printf("using ssl\n");
+    //printf("using ssl\n");
     assert(client.secure);
   }
 #endif /* HAVE_GNUTLS */
 
   if(is_tcp) {
     r = oi_socket_open_tcp(&client, HOST, PORT);
-    printf("connecting client to port 5000\n");
+    //printf("connecting client to port 5000\n");
   } else {
     r = oi_socket_open_unix(&client, SOCKFILE);
   }
