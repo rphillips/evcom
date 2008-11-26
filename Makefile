@@ -62,7 +62,6 @@ clean:
 	@echo CLEANING
 	@rm -f ${OBJ} $(OUTPUT_A) $(OUTPUT_LIB) $(NAME)-${VERSION}.tar.gz 
 	@rm -f test/ping_pong  
-	@rm -f examples/echo  
 
 clobber: clean
 	@echo CLOBBERING

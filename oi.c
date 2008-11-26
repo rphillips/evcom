@@ -30,6 +30,8 @@
 #define OI_AGAIN   1
 #define OI_ERROR   2 
 
+#define MIN(a,b) (a < b ? a : b)
+
 static int 
 full_close(oi_socket *socket)
 {
@@ -192,7 +194,7 @@ static int
 secure_socket_recv(oi_socket *socket)
 {
   char recv_buffer[TCP_MAXWIN];
-  size_t recv_buffer_size = TCP_MAXWIN;
+  size_t recv_buffer_size = MIN(TCP_MAXWIN, socket->max_chunksize);
   ssize_t recved;
 
   assert(socket->secure);
@@ -779,6 +781,7 @@ oi_socket_init(oi_socket *socket, float timeout)
   socket->read_action = NULL;
   socket->write_action = NULL;
 
+  socket->max_chunksize = TCP_MAXWIN; 
   socket->on_connect = NULL;
   socket->on_read = NULL;
   socket->on_drain = NULL;
