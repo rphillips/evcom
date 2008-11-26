@@ -11,7 +11,6 @@
 #include <netinet/tcp.h> /* TCP_NODELAY */
 #include <arpa/inet.h>
 
-
 #include "oi.h"
  
 #ifndef TRUE
@@ -21,13 +20,15 @@
 # define FALSE 0
 #endif
 
-#define oi_error(FORMAT, ...) fprintf(stderr, "error: " FORMAT "\n", ##__VA_ARGS__)
-
 #ifdef HAVE_GNUTLS
 # include <gnutls/gnutls.h>
 # define GNUTLS_NEED_WRITE (gnutls_record_get_direction(socket->session) == 1)
 # define GNUTLS_NEED_READ (gnutls_record_get_direction(socket->session) == 0)
 #endif
+
+#define OI_OKAY    0
+#define OI_AGAIN   1
+#define OI_ERROR   2 
 
 static int 
 full_close(oi_socket *socket)
@@ -280,20 +281,6 @@ secure_half_goodbye(oi_socket *socket)
   return r;
 }
 
-static void
-set_transport_gnutls(oi_socket *socket)
-{
-  assert(socket->secure);
-  gnutls_transport_set_lowat(socket->session, 0); 
-  gnutls_transport_set_push_function(socket->session, nosigpipe_push);
-  gnutls_transport_set_ptr2 ( socket->session
-                            , (gnutls_transport_ptr_t)socket->fd /*recv*/
-                            , socket /* send */
-                            );
-  socket->read_action = secure_handshake;
-  socket->write_action = secure_handshake;
-}
-
 /* Tells the socket to use transport layer security (SSL). liboi does not
  * want to make any decisions about security requirements, so the
  * majoirty of GnuTLS configuration is left to the user. Only the transport
@@ -414,6 +401,31 @@ socket_recv(oi_socket *socket)
   return OI_OKAY;
 }
 
+static void
+assign_file_descriptor(oi_socket *socket, int fd)
+{
+  socket->fd = fd;
+
+  ev_io_set (&socket->read_watcher, fd, EV_ERROR | EV_READ);
+  ev_io_set (&socket->write_watcher, fd, EV_ERROR | EV_WRITE);
+
+  socket->read_action = socket_recv;
+  socket->write_action = socket_send;
+
+#ifdef HAVE_GNUTLS
+  if(socket->secure) {
+    gnutls_transport_set_lowat(socket->session, 0); 
+    gnutls_transport_set_push_function(socket->session, nosigpipe_push);
+    gnutls_transport_set_ptr2 ( socket->session
+                 /* recv */   , (gnutls_transport_ptr_t)fd 
+                 /* send */   , socket 
+                              );
+    socket->read_action = secure_handshake;
+    socket->write_action = secure_handshake;
+  }
+#endif 
+}
+
 
 /* Internal callback 
  * Called by server->connection_watcher.
@@ -430,7 +442,6 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
   assert(&server->connection_watcher == watcher);
   
   if(EV_ERROR & revents) {
-    oi_error("on_connection() got error event, closing server.");
     oi_server_close(server);
     return;
   }
@@ -450,7 +461,6 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
     socket = server->on_connection(server, (struct sockaddr*)&address, addr_len);
 
   if(socket == NULL) {
-    oi_error("problem getting peer socket");
     close(fd);
     return;
   } 
@@ -458,7 +468,7 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
   int flags = fcntl(fd, F_GETFL, 0);
   int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
   if(r < 0) {
-    oi_error("error setting peer socket non-blocking");
+    /* TODO error report */
   }
   
 #ifdef SO_NOSIGPIPE
@@ -466,21 +476,10 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
   setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &flags, sizeof(flags));
 #endif
 
-  socket->fd = fd;
   socket->server = server;
   memcpy(&socket->remote_address, &address, addr_len);
 
-  socket->read_action = socket_recv;
-  socket->write_action = socket_send;
-
-#ifdef HAVE_GNUTLS
-  if(socket->secure) {
-    set_transport_gnutls(socket);
-  }
-#endif /* HAVE_GNUTLS */
-
-  ev_io_set(&socket->write_watcher, fd, EV_ERROR | EV_WRITE);
-  ev_io_set(&socket->read_watcher,  fd, EV_ERROR | EV_READ);
+  assign_file_descriptor(socket, fd);
 
   oi_socket_attach(socket, loop);
 }
@@ -499,7 +498,7 @@ listen_on_fd(oi_server *server, const int fd)
   int flags = fcntl(fd, F_GETFL, 0);
   int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
   if(r < 0) {
-    oi_error("error setting server socket non-blocking");
+    /* TODO error report */
   }
   
   server->fd = fd;
@@ -641,9 +640,6 @@ oi_server_close(oi_server *server)
   }
 }
 
-#ifdef HAVE_GNUTLS
-#endif /* HAVE_GNUTLS */
-
 void
 oi_server_attach (oi_server *server, struct ev_loop *loop)
 {
@@ -693,8 +689,15 @@ on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
   full_close(socket);
 }
 
-#ifdef HAVE_GNUTLS
-#endif /* HAVE_GNUTLS */
+static void
+release_write_buffer(oi_socket *socket)
+{
+  while(socket->write_buffer) {
+    oi_buf *buf = socket->write_buffer;
+    socket->write_buffer = buf->next;
+    if(buf->release) { buf->release(buf); }
+  }
+}
 
 /* Internal callback. called by socket->read_watcher */
 static void 
@@ -734,7 +737,7 @@ error:
   if(socket->on_error) { socket->on_error(socket); }
 
 close:
-  /* TODO drop write buf */
+  release_write_buffer(socket);
   oi_socket_detach(socket);
   if(socket->on_close) { socket->on_close(socket); }
   /* WARNING: user can free socket in on_close so no more 
@@ -916,7 +919,9 @@ oi_socket_read_start (oi_socket *socket)
   }
 }
 
-/* for now host is only allowed to be an IP address */
+/* for now host is only allowed to be an IP address 
+ * ie no dns lookup
+ */
 int
 oi_socket_open_tcp (oi_socket *s, const char *host, int port)
 {
@@ -930,7 +935,7 @@ oi_socket_open_tcp (oi_socket *s, const char *host, int port)
   int flags = fcntl(fd, F_GETFL, 0);
   int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
   if(r < 0) {
-    oi_error("error setting peer socket non-blocking");
+    /* TODO error report */
     return r;
   }
 
@@ -956,17 +961,7 @@ oi_socket_open_tcp (oi_socket *s, const char *host, int port)
     return fd;
   }
 
-  s->fd = fd;
-
-  ev_io_set (&s->read_watcher, fd, EV_ERROR | EV_READ);
-  ev_io_set (&s->write_watcher, fd, EV_ERROR | EV_WRITE);
-
-  s->read_action = socket_recv;
-  s->write_action = socket_send;
-
-  if(s->secure) {
-    set_transport_gnutls(s);
-  }
+  assign_file_descriptor(s, fd);
 
   return fd;
 }
@@ -984,7 +979,7 @@ oi_socket_open_unix (oi_socket *s, const char *socketfile)
   int flags = fcntl(fd, F_GETFL, 0);
   int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
   if(r < 0) {
-    oi_error("error setting peer socket non-blocking");
+    /* TODO error report */
     return r;
   }
 
@@ -1009,17 +1004,7 @@ oi_socket_open_unix (oi_socket *s, const char *socketfile)
     return fd;
   }
 
-  s->fd = fd;
-
-  ev_io_set (&s->read_watcher, fd, EV_ERROR | EV_READ);
-  ev_io_set (&s->write_watcher, fd, EV_ERROR | EV_WRITE);
-
-  s->read_action = socket_recv;
-  s->write_action = socket_send;
-
-  if(s->secure) {
-    set_transport_gnutls(s);
-  }
+  assign_file_descriptor(s, fd);
 
   return fd;
 }

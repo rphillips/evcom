@@ -13,8 +13,6 @@
 #define SOCKFILE "/tmp/oi.sock"
 #define PORT 5000
 #define HOST "127.0.0.1"
-
-
 #define PING "PING"
 #define PONG "PONG"
 #define EXCHANGES 5
@@ -184,7 +182,6 @@ main(int argc, const char *argv[])
     fsync((int)stderr);
     gnutls_dh_params_generate2 (dh_params, DH_BITS);
     fprintf(stderr, "done\n");
-    fsync((int)stderr);
 
     gnutls_anon_allocate_server_credentials (&server_credentials);
     gnutls_anon_set_server_dh_params (server_credentials, dh_params);

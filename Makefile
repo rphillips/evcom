@@ -1,6 +1,3 @@
-# liboi - async madness
-# See README file for copyright and license details.
-
 include config.mk
 
 DEP = oi.h
@@ -42,8 +39,6 @@ $(OUTPUT_A): $(OBJ)
 
 ${OBJ}: ${DEP}
 
-PASS="PASS"
-FAIL="FAIL"
 FAIL=echo "\033[1;31mFAIL\033[m"
 PASS=echo "\033[1;32mPASS\033[m"
 TEST= && $(PASS) || $(FAIL)
@@ -63,12 +58,6 @@ test/ping_pong: test/ping_pong.c $(OUTPUT_A)
 	@echo BUILDING test/ping_pong
 	$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
 
-examples: examples/echo
-
-examples/echo: examples/echo.c $(OUTPUT_A) 
-	@echo BUILDING examples/echo
-	$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
-
 clean:
 	@echo CLEANING
 	@rm -f ${OBJ} $(OUTPUT_A) $(OUTPUT_LIB) $(NAME)-${VERSION}.tar.gz 
@@ -77,14 +66,6 @@ clean:
 
 clobber: clean
 	@echo CLOBBERING
-
-dist: clean $(SRC)
-	@echo CREATING dist tarball
-	@mkdir -p ${NAME}-${VERSION}
-	@cp -R doc examples LICENSE Makefile README config.mk ${SRC} ${DEP} ${NAME}-${VERSION}
-	@tar -cf ${NAME}-${VERSION}.tar ${NAME}-${VERSION}
-	@gzip ${NAME}-${VERSION}.tar
-	@rm -rf ${NAME}-${VERSION}
 
 install: $(OUTPUT_LIB) $(OUTPUT_A)
 	@echo INSTALLING ${OUTPUT_A} and ${OUTPUT_LIB} to ${PREFIX}/lib
@@ -102,7 +83,4 @@ uninstall:
 	@echo REMOVING headers from ${PREFIX}/include
 	rm -f ${PREFIX}/include/oi.h
 
-upload_website:
-	scp -r doc/index.html doc/icon.png rydahl@tinyclouds.org:~/web/public/liboi
-
-.PHONY: all options clean clobber dist install uninstall test upload_website examples
+.PHONY: all options clean clobber install uninstall test 

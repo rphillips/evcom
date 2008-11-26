@@ -5,7 +5,7 @@ EVINC  = $(HOME)/local/libev/include
 EVLIB  = $(HOME)/local/libev/lib
 EVLIBS = -L${EVLIB} -lev
 
-# GnuTLS, comment if you don't want it (necessary for HTTPS)
+# GnuTLS, comment out if you don't want it
 GNUTLSLIB   = /usr/lib
 GNUTLSINC   = /usr/include
 GNUTLSLIBS  = -L${GNUTLSLIB} -lgnutls
@@ -29,9 +29,9 @@ SONAME   = -Wl,-soname,$(OUTPUT_LIB)
 #SONAME  = 
 
 # Darwin
-# LDOPT  = -dynamiclib 
-# SUFFIX = dylib
-# SONAME = -current_version $(VERSION) -compatibility_version $(VERSION)
+#LDOPT  = -dynamiclib 
+#SUFFIX = dylib
+#SONAME = -current_version $(VERSION) -compatibility_version $(VERSION)
 
 # compiler and linker
 CC = cc
