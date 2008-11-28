@@ -1,5 +1,7 @@
 #include "test/common.c"
-#define NCONN 2
+#define NCONN 100
+
+static oi_server server;
 
 static void 
 on_peer_read(oi_socket *socket, const void *base, size_t len)
@@ -44,6 +46,10 @@ static void
 on_client_close(oi_socket *socket)
 {
   printf("client connection closed\n");
+  if(++nconnections == NCONN) {
+    oi_server_detach(&server);
+    printf("detaching server\n");
+  }
 }
 
 static void 
@@ -57,7 +63,6 @@ on_client_read(oi_socket *socket, const void *base, size_t len)
   
   if(strcmp(buf, "BYE") == 0) {
     oi_socket_close(socket);
-    nconnections++;
   } else {
     exit(1);
   }
@@ -68,14 +73,13 @@ main(int argc, const char *argv[])
 {
   int r;
   struct ev_loop *loop = ev_default_loop(0);
-  oi_server server;
 
   if(argc >= 2 && strcmp(argv[1], "tcp") == 0)
     is_tcp = 1;
   if(argc >= 3 && strcmp(argv[2], "secure") == 0)
     is_secure = 1;
 
-  oi_server_init(&server, 10);
+  oi_server_init(&server, 1000);
   server.on_connection = on_server_connection;
 #ifdef HAVE_GNUTLS
   if(is_secure) anon_tls_init();

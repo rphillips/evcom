@@ -26,9 +26,9 @@
 # define GNUTLS_NEED_READ (gnutls_record_get_direction(socket->session) == 0)
 #endif
 
-#define OI_OKAY    0
-#define OI_AGAIN   1
-#define OI_ERROR   2 
+#define OI_OKAY  0
+#define OI_AGAIN 1
+#define OI_ERROR 2 
 
 #define MIN(a,b) (a < b ? a : b)
 
