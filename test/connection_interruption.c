@@ -45,10 +45,10 @@ on_client_connect(oi_socket *socket)
 static void 
 on_client_close(oi_socket *socket)
 {
-  printf("client connection closed\n");
+  //printf("client connection closed\n");
   if(++nconnections == NCONN) {
     oi_server_detach(&server);
-    printf("detaching server\n");
+    //printf("detaching server\n");
   }
 }
 
@@ -59,7 +59,7 @@ on_client_read(oi_socket *socket, const void *base, size_t len)
   strncpy(buf, base, len);
   buf[len] = 0;
 
-  printf("client got message: %s\n", buf);
+  //printf("client got message: %s\n", buf);
   
   if(strcmp(buf, "BYE") == 0) {
     oi_socket_close(socket);

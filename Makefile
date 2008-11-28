@@ -43,7 +43,7 @@ FAIL=echo "\033[1;31mFAIL\033[m"
 PASS=echo "\033[1;32mPASS\033[m"
 TEST= && $(PASS) || $(FAIL)
 
-test: test/ping_pong
+test: test/ping_pong test/connection_interruption
 	@echo "ping pong"
 	@echo -n "- unix: "
 	@./test/ping_pong unix $(TEST)
@@ -53,6 +53,15 @@ test: test/ping_pong
 	@./test/ping_pong unix secure $(TEST)
 	@echo -n "- tcp secure: "
 	@./test/ping_pong tcp secure $(TEST)
+	@echo "connection interruption"
+	@echo -n "- unix: "
+	@./test/connection_interruption unix $(TEST)
+	@echo -n "- tcp: "
+	@./test/connection_interruption tcp $(TEST)
+	@echo -n "- unix secure: "
+	@./test/connection_interruption unix secure $(TEST)
+	@echo -n "- tcp secure: "
+	@./test/connection_interruption tcp secure $(TEST)
 
 test/ping_pong: test/ping_pong.c $(OUTPUT_A)
 	@echo BUILDING test/ping_pong

@@ -10,6 +10,7 @@
 # include <gnutls/gnutls.h>
 #endif
 
+#define HOST "127.0.0.1"
 #define SOCKFILE "/tmp/oi.sock"
 #define PORT 5000
 
@@ -42,16 +43,16 @@ on_peer_timeout(oi_socket *socket)
 }
 
 static void 
-on_peer_error(oi_socket *socket)
+on_peer_error(oi_socket *socket, int domain, int code)
 {
-  fprintf(stderr, "an error happend on the peer socket\n");
+  fprintf(stderr, "error on the peer socket: %s\n", oi_strerror(domain, code));
   exit(1);
 }
 
 static void 
-on_client_error(oi_socket *socket)
+on_client_error(oi_socket *socket, int domain, int code)
 {
-  fprintf(stderr, "an error happend on the client socket\n");
+  fprintf(stderr, "error on the client socket: %s\n", oi_strerror(domain, code));
   exit(1);
 }
 
