@@ -11,7 +11,7 @@ OUTPUT_A=$(NAME).a
 
 LINKER=$(CC) $(LDOPT)
 
-all: options $(OUTPUT_LIB) $(OUTPUT_A) test/ping_pong
+all: options $(OUTPUT_LIB) $(OUTPUT_A) test/ping_pong test/connection_interruption
 
 options:
 	@echo ${NAME} build options:
@@ -56,6 +56,10 @@ test: test/ping_pong
 
 test/ping_pong: test/ping_pong.c $(OUTPUT_A)
 	@echo BUILDING test/ping_pong
+	$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
+
+test/connection_interruption: test/connection_interruption.c $(OUTPUT_A)
+	@echo BUILDING test/connection_interruption
 	$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
 
 clean:

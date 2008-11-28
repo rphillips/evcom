@@ -34,6 +34,7 @@ void oi_socket_read_start         (oi_socket *); /* TODO set chunksize */
 void oi_socket_reset_timeout      (oi_socket *);
 void oi_socket_write              (oi_socket *, oi_buf *);
 void oi_socket_write_simple       (oi_socket *, const char *str, size_t len);
+void oi_socket_write_eof          (oi_socket *);
 void oi_socket_close              (oi_socket *);
 #ifdef HAVE_GNUTLS
 void oi_socket_set_secure_session (oi_socket *, gnutls_session_t);
