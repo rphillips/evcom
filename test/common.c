@@ -21,17 +21,17 @@ static int is_tcp = 0;
 static void 
 on_peer_close(oi_socket *socket)
 {
+  //printf("server connection closed\n");
 #ifdef HAVE_GNUTLS
   if(is_secure) { gnutls_deinit(socket->session); }
 #endif
-  //printf("server connection closed\n");
   free(socket);
 }
 
 static void 
 on_client_timeout(oi_socket *socket)
 {
-  //printf("client connection timeout\n");
+  printf("client connection timeout\n");
   exit(1);
 }
 
@@ -69,10 +69,10 @@ void anon_tls_init()
 
   gnutls_dh_params_init (&dh_params);
 
-  fprintf(stderr, "generating primes...");
+  fprintf(stderr, "..");
   fsync((int)stderr);
   gnutls_dh_params_generate2 (dh_params, DH_BITS);
-  fprintf(stderr, "done\n");
+  fprintf(stderr, ".");
 
   gnutls_anon_allocate_server_credentials (&server_credentials);
   gnutls_anon_set_server_dh_params (server_credentials, dh_params);

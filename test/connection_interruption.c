@@ -1,5 +1,6 @@
 #include "test/common.c"
 #define NCONN 100
+#define TIMEOUT 1000.0
 
 static oi_server server;
 
@@ -8,6 +9,7 @@ on_peer_read(oi_socket *socket, const void *base, size_t len)
 {
   assert(len == 0);
   oi_socket_write_simple(socket, "BYE", 3);
+  //printf("server wrote bye\n");
 }
 
 static void 
@@ -16,15 +18,24 @@ on_peer_drain(oi_socket *socket)
   oi_socket_close(socket);
 }
 
+
+static void 
+on_peer_error2(oi_socket *socket, int domain, int code)
+{
+  if(domain == OI_ERROR_DOMAIN_GNUTLS) return;
+  fprintf(stderr, "error on the peer socket: %s\n", oi_strerror(domain, code));
+  exit(1);
+}
+
 static oi_socket* 
 on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
 {
   oi_socket *socket = malloc(sizeof(oi_socket));
-  oi_socket_init(socket, 5.0);
-  socket->on_read = on_peer_read;
-  socket->on_drain = on_peer_drain;
-  socket->on_error = on_peer_error;
-  socket->on_close = on_peer_close;
+  oi_socket_init(socket, TIMEOUT);
+  socket->on_read    = on_peer_read;
+  socket->on_drain   = on_peer_drain;
+  socket->on_error   = on_peer_error2;
+  socket->on_close   = on_peer_close;
   socket->on_timeout = on_peer_timeout;
 
 #ifdef HAVE_GNUTLS
@@ -95,7 +106,7 @@ main(int argc, const char *argv[])
   int i;
   for(i = 0; i < NCONN; i++) {
     oi_socket *client = malloc(sizeof(oi_socket));
-    oi_socket_init(client, 5.0);
+    oi_socket_init(client, TIMEOUT);
     client->on_read    = on_client_read;
     client->on_error   = on_client_error;
     client->on_connect = on_client_connect;

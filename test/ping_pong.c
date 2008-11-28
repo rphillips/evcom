@@ -2,7 +2,7 @@
 
 #define PING "PING"
 #define PONG "PONG"
-#define EXCHANGES 50
+#define EXCHANGES 100
 
 int successful_ping_count; 
 

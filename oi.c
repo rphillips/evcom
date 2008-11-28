@@ -835,14 +835,19 @@ void
 oi_socket_write_eof (oi_socket *socket)
 {
   /* try to hang up properly for secure connections */
-  if( socket->secure 
-   && socket->connected /* completed handshake */ 
-   && socket->write_action /* write end is open */
-    ) 
+  if(socket->secure) 
   {
-    socket->write_action = secure_half_goodbye;
-    if(socket->loop)
-      ev_io_start(socket->loop, &socket->write_watcher);
+    if( socket->connected /* completed handshake */ 
+     && socket->write_action /* write end is open */
+      ) 
+    {
+      socket->write_action = secure_half_goodbye;
+      if(socket->loop)
+        ev_io_start(socket->loop, &socket->write_watcher);
+      return;
+    }
+    /* secure servers cannot handle half-closed connections? */
+    full_close(socket); 
     return;
   }
 
