@@ -151,7 +151,7 @@ secure_socket_send(oi_socket *socket)
 
   if(to_write == NULL) {
     ev_io_stop(socket->loop, &socket->write_watcher);
-    return OI_OKAY;
+    return OI_AGAIN;
   }
 
   sent = gnutls_record_send( socket->session
@@ -315,7 +315,7 @@ socket_send(oi_socket *socket)
 
   if(to_write == NULL) {
     ev_io_stop(socket->loop, &socket->write_watcher);
-    return OI_OKAY;
+    return OI_AGAIN;
   }
 
   
@@ -711,24 +711,28 @@ on_io_event(struct ev_loop *loop, ev_io *watcher, int revents)
     goto error;
 
   int r;
-  int have_read_event = revents & EV_READ;
-  int have_write_event = revents & EV_WRITE;
+  int have_read_event = TRUE;
+  int have_write_event = TRUE;
 
-  //while(have_read_event || have_write_event) {
+  while(have_read_event || have_write_event) {
 
-    if(have_read_event && socket->read_action) {
+    if(socket->read_action) {
       r = socket->read_action(socket);
       if(r == OI_ERROR) goto error;
       if(r == OI_AGAIN) have_read_event = FALSE;
+    } else {
+      have_read_event = FALSE;
     }
 
-    if(have_write_event && socket->write_action) {
+    if(socket->write_action) {
       r = socket->write_action(socket);
       if(r == OI_ERROR) goto error;
       if(r == OI_AGAIN) have_write_event = FALSE;
+    } else {
+      have_write_event = FALSE;
     }
 
-  //}
+  }
 
   if(socket->write_action == NULL && socket->read_action == NULL)
     goto close;
