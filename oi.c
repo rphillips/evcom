@@ -11,6 +11,7 @@
 #include <netinet/tcp.h> /* TCP_NODELAY */
 #include <arpa/inet.h>
 
+#include <ev.h>
 #include "oi.h"
  
 #ifndef TRUE
@@ -112,6 +113,7 @@ update_write_buffer_after_send(oi_socket *socket, ssize_t sent)
 static int secure_socket_send(oi_socket *socket);
 static int secure_socket_recv(oi_socket *socket);
 
+/* TODO can this be done without ignoring SIGPIPE?  */
 static ssize_t 
 nosigpipe_push(gnutls_transport_ptr_t data, const void *buf, size_t len)
 {
@@ -127,8 +129,7 @@ nosigpipe_push(gnutls_transport_ptr_t data, const void *buf, size_t len)
   int r = send(socket->fd, buf, len, flags);
 
   if(r == -1) {
-    /* necessary ? */
-    gnutls_transport_set_errno(socket->session, errno);
+    gnutls_transport_set_errno(socket->session, errno); /* necessary ? */
   }
 
   return r;

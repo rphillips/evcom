@@ -1,6 +1,3 @@
-#ifndef oi_h
-#define oi_h
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -10,6 +7,9 @@
 #ifdef HAVE_GNUTLS
 # include <gnutls/gnutls.h>
 #endif
+
+#ifndef oi_h
+#define oi_h
 
 /* Error Domains */
 #define OI_ERROR_DOMAIN_OI     0

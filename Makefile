@@ -1,7 +1,7 @@
 include config.mk
 
-DEP = oi.h
-SRC = oi.c
+DEP = oi.h oi_thread_pool.h
+SRC = oi.c oi_thread_pool.c
 OBJ = ${SRC:.c=.o}
 
 VERSION = 0.1
@@ -11,7 +11,7 @@ OUTPUT_A=$(NAME).a
 
 LINKER=$(CC) $(LDOPT)
 
-all: options $(OUTPUT_LIB) $(OUTPUT_A) test/ping_pong test/connection_interruption
+all: options $(OUTPUT_LIB) $(OUTPUT_A) test/ping_pong test/connection_interruption test/sleeping_tasks
 
 options:
 	@echo ${NAME} build options:
@@ -69,6 +69,10 @@ test/ping_pong: test/ping_pong.c $(OUTPUT_A)
 
 test/connection_interruption: test/connection_interruption.c $(OUTPUT_A)
 	@echo BUILDING test/connection_interruption
+	$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
+
+test/sleeping_tasks: test/sleeping_tasks.c $(OUTPUT_A)
+	@echo BUILDING test/sleeping_tasks
 	$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
 
 clean:

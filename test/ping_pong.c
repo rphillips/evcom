@@ -12,7 +12,7 @@ on_peer_read(oi_socket *socket, const void *base, size_t len)
   if(len == 0) 
     return;
 
-  char buf[200000];
+  char buf[2000];
   strncpy(buf, base, len);
   buf[len] = 0;
   //printf("server got message: %s\n", buf);
