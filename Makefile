@@ -78,7 +78,8 @@ test/sleeping_tasks: test/sleeping_tasks.c $(OUTPUT_A)
 clean:
 	@echo CLEANING
 	@rm -f ${OBJ} $(OUTPUT_A) $(OUTPUT_LIB) $(NAME)-${VERSION}.tar.gz 
-	@rm -f test/ping_pong test/connection_interruption
+	@rm -f test/ping_pong test/connection_interruption test/sleeping_tasks
+
 
 install: $(OUTPUT_LIB) $(OUTPUT_A)
 	@echo INSTALLING ${OUTPUT_A} and ${OUTPUT_LIB} to ${PREFIX}/lib

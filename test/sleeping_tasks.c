@@ -12,7 +12,7 @@ void run(void *data)
   sleep(1);
 }
 
-void on_completion (oi_thread_pool_task *task)
+void done (oi_thread_pool_task *task)
 {
   if(++runs == SLEEPS)
     oi_thread_pool_detach(task->pool->loop, task->pool);
@@ -31,7 +31,7 @@ main()
   for(i = 0; i < SLEEPS; i++) {
     oi_thread_pool_task *task = malloc(sizeof(oi_thread_pool_task));
     task->run = run;
-    task->on_completion = on_completion;
+    task->done = done;
     oi_thread_pool_execute(&pool, task);
   }
 

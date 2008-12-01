@@ -27,8 +27,8 @@ struct oi_thread_pool_task {
   ngx_queue_t queue;
 
   /* public */
-  void (*run) (void *data);
-  void (*on_completion) (oi_thread_pool_task *);
+  void (*run)  (void *data);
+  void (*done) (oi_thread_pool_task *);
   void *data;
 }; 
 

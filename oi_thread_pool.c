@@ -45,8 +45,11 @@ on_task(struct ev_loop *loop, ev_io *watcher, int revents)
 
   char dummy;
   int red = read(readiness_pipe[0], &dummy, 1);
-
-  assert(red == 1); /* TODO real error checking */
+  if(red == -1) {
+    perror("read()");
+    /* TODO real error checking */
+    return;
+  }
 
   // 1 pop task from queue
   pthread_mutex_lock(&queue_lock);
@@ -61,7 +64,7 @@ on_task(struct ev_loop *loop, ev_io *watcher, int revents)
 
   oi_thread_pool_task *task = ngx_queue_data(last, oi_thread_pool_task, queue);
   
-  // 2 run task->task
+  // 2 run task->run
   assert(task->run != NULL);
   task->run(task->data);
   
@@ -164,9 +167,9 @@ on_completion(struct ev_loop *loop, ev_async *watcher, int revents)
 
   oi_thread_pool_task *task = ngx_queue_data(last, oi_thread_pool_task, queue);
 
-  assert(task->on_completion != NULL);
-  task->on_completion(task);
-  /* this task is possibly freed by on_completion. do not access it below
+  assert(task->done != NULL);
+  task->done(task);
+  /* this task is possibly freed by done. do not access it below
    * this point */
   task = NULL;
 
@@ -246,7 +249,7 @@ void
 oi_thread_pool_execute (oi_thread_pool *pool, oi_thread_pool_task *task)
 {
   assert(task->pool == NULL);
-  assert(task->on_completion != NULL);
+  assert(task->done != NULL);
   assert(task->run != NULL);
   task->pool = pool;
 
@@ -260,6 +263,6 @@ void oi_thread_pool_task_init (oi_thread_pool_task *task)
 {
   task->pool = NULL;
   task->run = NULL;
-  task->on_completion = NULL;
+  task->done = NULL;
   task->data = NULL;
 }
