@@ -1,0 +1,45 @@
+#include "oi.h"
+#include <eio.h>
+#include <ev.h>
+
+#ifndef oi_file_h
+#define oi_file_h
+
+typedef struct oi_file oi_file;
+
+int  oi_file_init         (oi_file *);
+
+void oi_file_attach       (oi_file *, struct ev_loop *);
+void oi_file_detach       (oi_file *);
+
+void oi_file_open_path    (oi_file *, const char *path, int flags, mode_t mode);
+void oi_file_open_stdin   (oi_file *);
+void oi_file_open_stdout  (oi_file *);
+void oi_file_open_stderr  (oi_file *);
+
+void oi_file_read_start   (oi_file *);
+void oi_file_read_stop    (oi_file *);
+void oi_file_write        (oi_file *, oi_buf *);
+void oi_file_stream       (oi_file *, oi_socket *);
+void oi_file_write_simple (oi_file *, const char *, size_t);
+void oi_file_close        (oi_file *);
+
+struct oi_file {
+  /* private */
+  int fd;
+  ev_async thread_pool_result_watcher;
+  struct ev_loop *loop;
+  struct eio_queue task_queue;
+    
+  /* public */
+  size_t max_chunksize; /* the maximum chunk that on_read() will return */
+  void (*on_open)      (oi_file *);
+  void (*on_connect)   (oi_file *);
+  void (*on_read)      (oi_file *, const char *buf, size_t count);
+  void (*on_drain)     (oi_file *);
+  void (*on_error)     (oi_file *, int domain, int code);
+  void (*on_close)     (oi_file *);
+  void *data;
+};
+
+#endif /*  oi_file_h */
