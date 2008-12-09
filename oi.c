@@ -83,8 +83,6 @@ half_close(oi_socket *socket)
   return OI_OKAY;
 }
 
-
-
 static void
 update_write_buffer_after_send(oi_socket *socket, ssize_t sent)
 {

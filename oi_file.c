@@ -1,10 +1,14 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 #include <eio.h>
 #include <ev.h>
 
 #include "oi_file.h"
+
+/* forwards */
+static void read_chunk(oi_file *file);
 
 static void 
 want_poll(struct eio_queue *queue)
@@ -49,6 +53,44 @@ oi_file_init (oi_file *file)
   return 0;
 }
 
+static int
+after_read(eio_req *req)
+{
+  oi_file *file = req->data;
+
+  if(req->result == -1) {
+    printf("file read: error!\n");
+    return -1;
+  }
+
+  if(file->on_read) { file->on_read(file, req->ptr2, req->result); }
+
+  free(req->ptr2);
+
+  if(req->result != 0)
+    read_chunk(file);
+
+  return 0;
+}
+
+static void
+read_chunk(oi_file *file)
+{
+  /* TODO: 
+   *  - check the fd is open 
+   *  - check that we're reading 
+   */
+  eio_read ( file->fd
+           , NULL
+           , file->max_chunksize
+           , 0
+           , &file->task_queue 
+           , EIO_PRI_DEFAULT
+           , after_read
+           , file
+           );
+}
+
 static int 
 after_open(eio_req *req)
 {
@@ -60,7 +102,11 @@ after_open(eio_req *req)
   }
 
   file->fd = req->result;
-  printf("file opened, fd: %d\n", file->fd);
+
+  if(file->on_open) { file->on_open(file); }
+
+  read_chunk(file);
+
   return 0;
 }
 
