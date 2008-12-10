@@ -1,4 +1,5 @@
 #include "oi.h"
+#include "ngx_queue.h"
 #include <eio.h>
 #include <ev.h>
 
@@ -17,11 +18,11 @@ void oi_file_open_stdin   (oi_file *);
 void oi_file_open_stdout  (oi_file *);
 void oi_file_open_stderr  (oi_file *);
 
-void oi_file_read_start   (oi_file *);
-void oi_file_read_stop    (oi_file *);
+int  oi_file_read         (oi_file *, oi_buf *to_be_filled);
+int  oi_file_read_simple  (oi_file *, size_t len);
 void oi_file_write        (oi_file *, oi_buf *);
-void oi_file_stream       (oi_file *, oi_socket *);
 void oi_file_write_simple (oi_file *, const char *, size_t);
+void oi_file_stream       (oi_file *source, oi_socket *destination);
 void oi_file_close        (oi_file *);
 
 struct oi_file {
@@ -30,12 +31,12 @@ struct oi_file {
   ev_async thread_pool_result_watcher;
   struct ev_loop *loop;
   struct eio_queue task_queue;
+  ngx_queue_t write_queue;
+  oi_buf *read_buf;
     
   /* public */
-  size_t max_chunksize; /* the maximum chunk that on_read() will return */
   void (*on_open)      (oi_file *);
-  void (*on_connect)   (oi_file *);
-  void (*on_read)      (oi_file *, const char *buf, size_t count);
+  void (*on_read)      (oi_file *, oi_buf *, size_t recved);
   void (*on_drain)     (oi_file *);
   void (*on_error)     (oi_file *, int domain, int code);
   void (*on_close)     (oi_file *);

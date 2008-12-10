@@ -18,7 +18,7 @@ GNUTLSFLAGS = -DHAVE_GNUTLS
 
 # includes and libs
 INCS = -I${EIOINC} -I${EVINC} -I${GNUTLSINC}
-LIBS =   ${EIOLIBS}  ${EVLIBS}  ${GNUTLSLIBS} # -lefence
+LIBS =   ${EIOLIBS}  ${EVLIBS}  ${GNUTLSLIBS} -lefence
 
 # flags
 CPPFLAGS = -DVERSION=\"$(VERSION)\" ${GNUTLSFLAGS}

@@ -8,6 +8,8 @@
 # include <gnutls/gnutls.h>
 #endif
 
+#include "ngx_queue.h"
+
 #ifndef oi_h
 #define oi_h
 
@@ -113,15 +115,16 @@ struct oi_socket {
 };
 
 struct oi_buf {
-/* private */
-  size_t written;
-  oi_buf *next;
-
-/* public */
-  const void *base;
+  /* public */
+  char *base;
   size_t len;
   void (*release) (oi_buf *); /* called when oi_socket is done with the object */
   void *data;
+
+  /* private */
+  size_t written;
+  oi_buf *next;
+  ngx_queue_t queue;
 };
 
 #endif /* oi_h */
