@@ -194,6 +194,7 @@ oi_file_attach (oi_file *file, struct ev_loop *loop)
 {
   ev_async_start (loop, &file->thread_pool_result_watcher);
   file->loop = loop;
+  /* use ev_feed_event? */
   ev_async_send(file->loop, &file->thread_pool_result_watcher);
 }
 
@@ -215,18 +216,31 @@ after_write(eio_req *req)
     return -1;
   }
 
-  //printf("\nWRITE on fd %d returned: %d\n", file->fd, req->result);
-
   assert(file->write_buf != NULL);
   oi_buf *buf = file->write_buf;
+
+  buf->written += req->result;
+  if(buf->written < buf->len) {
+    eio_write ( file->fd
+              , buf->base + buf->written
+              , buf->len - buf->written
+              , -1
+              , &file->task_queue
+              , EIO_PRI_DEFAULT
+              , after_write
+              , file
+              );
+    return 0;
+  }
+
+  assert(buf->written == buf->len);
   file->write_buf = NULL;
 
   if(buf->release)
     buf->release(buf);
 
   if(ngx_queue_empty(&file->write_queue)) {
-    if(file->on_drain)
-      file->on_drain(file);
+    if(file->on_drain) { file->on_drain(file); }
   } else {
     dispatch_write_buf(file);
   }
@@ -261,6 +275,7 @@ void
 oi_file_write (oi_file *file, oi_buf *buf)
 {
   assert(file->fd >= 0 && "file not open!");
+  buf->written = 0;
   ngx_queue_insert_head(&file->write_queue, &buf->queue);
   dispatch_write_buf(file);
 }
