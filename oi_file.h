@@ -33,6 +33,7 @@ struct oi_file {
   struct eio_queue task_queue;
   ngx_queue_t write_queue;
   oi_buf *read_buf;
+  oi_buf *write_buf;
   oi_socket *write_socket;
     
   /* public */

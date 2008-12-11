@@ -48,8 +48,10 @@ oi_file_init (oi_file *file)
 
   ngx_queue_init(&file->write_queue);
 
+  file->fd = -1;
   file->loop = NULL;
   file->read_buf = NULL;
+  file->write_buf = NULL;
   file->on_open = NULL;
   file->on_read = NULL;
   file->on_drain = NULL;
@@ -213,11 +215,11 @@ after_write(eio_req *req)
     return -1;
   }
 
-  assert(!ngx_queue_empty(&file->write_queue));
+  //printf("\nWRITE on fd %d returned: %d\n", file->fd, req->result);
 
-  ngx_queue_t *q = ngx_queue_last(&file->write_queue);
-  ngx_queue_remove(q);
-  oi_buf *buf = ngx_queue_data(q, oi_buf, queue);
+  assert(file->write_buf != NULL);
+  oi_buf *buf = file->write_buf;
+  file->write_buf = NULL;
 
   if(buf->release)
     buf->release(buf);
@@ -235,14 +237,18 @@ after_write(eio_req *req)
 static void
 dispatch_write_buf(oi_file *file)
 {
-  assert(!ngx_queue_empty(&file->write_queue));
+  if(file->write_buf != NULL)
+    return;
+  if(ngx_queue_empty(&file->write_queue)) 
+    return;
 
   ngx_queue_t *q = ngx_queue_last(&file->write_queue);
-  oi_buf *buf = ngx_queue_data(q, oi_buf, queue);
+  ngx_queue_remove(q);
+  file->write_buf = ngx_queue_data(q, oi_buf, queue);
 
   eio_write ( file->fd
-            , buf->base
-            , buf->len
+            , file->write_buf->base
+            , file->write_buf->len
             , -1
             , &file->task_queue
             , EIO_PRI_DEFAULT
@@ -255,11 +261,8 @@ void
 oi_file_write (oi_file *file, oi_buf *buf)
 {
   assert(file->fd >= 0 && "file not open!");
-
   ngx_queue_insert_head(&file->write_queue, &buf->queue);
-  if(ngx_queue_empty(&file->write_queue)) {
-    dispatch_write_buf(file);
-  }
+  dispatch_write_buf(file);
 }
 
 /* Writes a string to the file. 
@@ -268,11 +271,14 @@ oi_file_write (oi_file *file, oi_buf *buf)
 void
 oi_file_write_simple (oi_file *file, const char *str, size_t len)
 {
+  assert(file->fd >= 0 && "file not open!");
+
   oi_buf *buf = malloc(sizeof(oi_buf));
   buf->base = malloc(len);
   memcpy(buf->base, str, len);
   buf->len = len;
   buf->release = oi_api_free_buf_with_heap_base;
+
   oi_file_write(file, buf);
 }
 

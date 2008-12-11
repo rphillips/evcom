@@ -15,29 +15,29 @@ static  oi_file file;
 static  oi_file out; 
 
 static void
-on_open(oi_file *file)
+on_open(oi_file *f)
 {
-#define OPEN_MSG "opened the file\n"
+#define OPEN_MSG "\nopened the file\n~~~~~~~~~~~~~~~~~~~~~~\n"
   oi_file_write_simple(&out, OPEN_MSG, sizeof(OPEN_MSG));
   
-  int r = oi_file_read_simple(file, 100);
+  int r = oi_file_read_simple(f, 100);
   assert(r >= 0);
 }
 
 static void
-on_close(oi_file *file)
+on_close(oi_file *f)
 {
-#define CLOSE_MSG "closed the file\n"
+#define CLOSE_MSG "\n~~~~~~~~~~~~~~~~~~~~~~\nclosed the file\n"
   oi_file_write_simple(&out, CLOSE_MSG, sizeof(CLOSE_MSG));
-
-  oi_file_detach(file);  
+  oi_file_detach(f);  
+  out.on_drain = oi_file_detach;
 }
 
 static void
-on_read(oi_file *file, oi_buf *buf, size_t recved)
+on_read(oi_file *f, oi_buf *buf, size_t recved)
 {
   oi_file_write_simple(&out, buf->base, recved);
-  oi_file_close(file);
+  oi_file_close(f);
 }
 
 int
