@@ -446,8 +446,8 @@ assign_file_descriptor(oi_socket *socket, int fd)
 {
   socket->fd = fd;
 
-  ev_io_set (&socket->read_watcher, fd, EV_ERROR | EV_READ);
-  ev_io_set (&socket->write_watcher, fd, EV_ERROR | EV_WRITE);
+  ev_io_set (&socket->read_watcher, fd, EV_READ);
+  ev_io_set (&socket->write_watcher, fd, EV_WRITE);
 
   socket->read_action = socket_recv;
   socket->write_action = socket_send;
@@ -544,7 +544,7 @@ listen_on_fd(oi_server *server, const int fd)
   server->fd = fd;
   server->listening = TRUE;
   
-  ev_io_set (&server->connection_watcher, server->fd, EV_READ | EV_ERROR);
+  ev_io_set (&server->connection_watcher, server->fd, EV_READ);
   
   return server->fd;
 }
