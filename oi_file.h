@@ -22,7 +22,7 @@ int  oi_file_read         (oi_file *, oi_buf *to_be_filled);
 int  oi_file_read_simple  (oi_file *, size_t len);
 void oi_file_write        (oi_file *, oi_buf *);
 void oi_file_write_simple (oi_file *, const char *, size_t);
-void oi_file_stream       (oi_file *source, oi_socket *destination);
+int  oi_file_send         (oi_file *source, oi_socket *destination, off_t offset, size_t length);
 void oi_file_close        (oi_file *);
 
 struct oi_file {
@@ -33,6 +33,7 @@ struct oi_file {
   struct eio_queue task_queue;
   ngx_queue_t write_queue;
   oi_buf *read_buf;
+  oi_socket *write_socket;
     
   /* public */
   void (*on_open)      (oi_file *);

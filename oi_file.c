@@ -164,6 +164,30 @@ oi_file_open_path (oi_file *file, const char *path, int flags, mode_t mode)
 }
 
 void
+oi_file_open_stdin (oi_file *file)
+{
+  file->fd = STDIN_FILENO;
+  if(file->on_open)
+    file->on_open(file);
+}
+
+void
+oi_file_open_stdout (oi_file *file)
+{
+  file->fd = STDOUT_FILENO;
+  if(file->on_open)
+    file->on_open(file);
+}
+
+void
+oi_file_open_stderr (oi_file *file)
+{
+  file->fd = STDERR_FILENO;
+  if(file->on_open)
+    file->on_open(file);
+}
+
+void
 oi_file_attach (oi_file *file, struct ev_loop *loop)
 {
   ev_async_start (loop, &file->thread_pool_result_watcher);
@@ -245,13 +269,59 @@ void
 oi_file_write_simple (oi_file *file, const char *str, size_t len)
 {
   oi_buf *buf = malloc(sizeof(oi_buf));
-  buf->release = (void (*)(oi_buf*))free;
-  buf->base = strdup(str);
+  buf->base = malloc(len);
+  memcpy(buf->base, str, len);
   buf->len = len;
+  buf->release = oi_api_free_buf_with_heap_base;
   oi_file_write(file, buf);
 }
 
-void oi_file_stream       (oi_file *, oi_socket *);
+static int
+after_sendfile(eio_req *req)
+{
+  oi_file *file = req->data;
+
+  if(req->result == -1) {
+    perror("write()");
+    return -1;
+  }
+
+  assert(file->write_socket != NULL);
+  if(file->write_socket->on_drain) {
+    file->write_socket->on_drain(file->write_socket);
+  }
+  file->write_socket = NULL;
+
+  if(file->on_drain) {
+    file->on_drain(file);
+  }
+
+  return 0;
+}
+
+int
+oi_file_send (oi_file *file, oi_socket *socket, off_t offset, size_t length)
+{
+  if(!ngx_queue_empty(&file->write_queue)) 
+    /* cannot call with there is stuff to write */
+    return -1;
+
+  if(file->write_socket != NULL)
+    /* cannot call this multiple times */
+    return -1;
+
+  file->write_socket = socket; 
+  eio_sendfile ( socket->fd
+               , file->fd
+               , offset
+               , length
+               , &file->task_queue
+               , EIO_PRI_DEFAULT
+               , after_sendfile
+               , file
+               );
+  return 0;
+}
 
 static void
 clear_write_queue(oi_file *file)
@@ -285,7 +355,6 @@ after_close(eio_req *req)
   if(file->on_close) {
     file->on_close(file);
   }
-
 
   return 0;
 }
