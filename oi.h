@@ -80,7 +80,7 @@ struct oi_socket {
   int fd;
   struct ev_loop *loop;
   oi_server *server;
-  oi_buf *write_buffer;
+  ngx_queue_t out_stream;
   size_t written;
 
   unsigned connected:1;
