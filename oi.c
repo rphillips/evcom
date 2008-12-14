@@ -15,6 +15,12 @@
 #include "ngx_queue.h"
 #include "oi.h"
  
+#ifdef HAVE_GNUTLS
+# include <gnutls/gnutls.h>
+# define GNUTLS_NEED_WRITE (gnutls_record_get_direction(socket->session) == 1)
+# define GNUTLS_NEED_READ (gnutls_record_get_direction(socket->session) == 0)
+#endif
+
 #ifndef TRUE
 # define TRUE 1
 #endif
@@ -22,11 +28,6 @@
 # define FALSE 0
 #endif
 
-#ifdef HAVE_GNUTLS
-# include <gnutls/gnutls.h>
-# define GNUTLS_NEED_WRITE (gnutls_record_get_direction(socket->session) == 1)
-# define GNUTLS_NEED_READ (gnutls_record_get_direction(socket->session) == 0)
-#endif
 
 #define OI_OKAY  0
 #define OI_AGAIN 1

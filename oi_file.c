@@ -52,6 +52,7 @@ oi_file_init (oi_file *file)
   file->loop = NULL;
   file->read_buf = NULL;
   file->write_buf = NULL;
+
   file->on_open = NULL;
   file->on_read = NULL;
   file->on_drain = NULL;
@@ -324,7 +325,7 @@ int
 oi_file_send (oi_file *file, oi_socket *socket, off_t offset, size_t length)
 {
   if(!ngx_queue_empty(&file->write_queue)) 
-    /* cannot call with there is stuff to write */
+    /* cannot call when there is stuff to write */
     return -1;
 
   if(file->write_socket != NULL)
