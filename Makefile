@@ -11,7 +11,7 @@ OUTPUT_A=$(NAME).a
 
 LINKER=$(CC) $(LDOPT)
 
-all: options $(OUTPUT_LIB) $(OUTPUT_A) test/ping_pong test/connection_interruption test/file
+all: options $(OUTPUT_LIB) $(OUTPUT_A) test/ping_pong test/connection_interruption test/file test/sleeping_tasks
 
 options:
 	@echo ${NAME} build options:
@@ -43,7 +43,7 @@ FAIL=echo "\033[1;31mFAIL\033[m"
 PASS=echo "\033[1;32mPASS\033[m"
 TEST= && $(PASS) || $(FAIL)
 
-test: test/ping_pong test/connection_interruption
+test: test/ping_pong test/connection_interruption test/sleeping_tasks
 	@echo "ping pong"
 	@echo -n "- unix: "
 	@./test/ping_pong unix $(TEST)
@@ -62,27 +62,35 @@ test: test/ping_pong test/connection_interruption
 	@./test/connection_interruption unix secure $(TEST)
 	@echo -n "- tcp secure: "
 	@./test/connection_interruption tcp secure $(TEST)
+	@echo -n "sleeping tasks: "
+	@./test/sleeping_tasks $(TEST)
+
 
 test/ping_pong: test/ping_pong.c $(OUTPUT_A)
 	@echo BUILDING test/ping_pong
-	$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
+	@$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
 
 test/connection_interruption: test/connection_interruption.c $(OUTPUT_A)
 	@echo BUILDING test/connection_interruption
-	$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
+	@$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
 
 test/fancy_copy: test/fancy_copy.c $(OUTPUT_A)
 	@echo BUILDING test/fancy_copy
-	$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
+	@$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
 
 test/file: test/file.c $(OUTPUT_A)
 	@echo BUILDING test/file
-	$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
+	@$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
+
+test/sleeping_tasks: test/sleeping_tasks.c $(OUTPUT_A)
+	@echo BUILDING test/sleeping_tasks
+	@$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
 
 clean:
 	@echo CLEANING
 	@rm -f ${OBJ} $(OUTPUT_A) $(OUTPUT_LIB) $(NAME)-${VERSION}.tar.gz 
 	@rm -f test/ping_pong test/connection_interruption test/fancy_copy test/file
+	@rm -f test/sleeping_tasks
 
 
 install: $(OUTPUT_LIB) $(OUTPUT_A)

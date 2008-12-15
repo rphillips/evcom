@@ -2,41 +2,53 @@
 #include <stdlib.h> /* malloc(), free() */
 #include <assert.h>
 #include <ev.h>
-#include "oi_thread_pool.h"
+#include "oi_async.h"
 
-#define SLEEPS 20
+#define SLEEPS 4
 static int runs = 0;
 
-void run(void *data)
+void
+done (oi_task *task, unsigned int result)
 {
-  sleep(1);
+  assert(result == 0);
+  if(++runs == SLEEPS) {
+    ev_timer *timer = task->data;
+    ev_timer_stop(task->async->loop, timer);
+    oi_async_detach(task->async);
+  }
+  free(task);
 }
 
-void done (oi_thread_pool_task *task)
+static void
+on_timeout(struct ev_loop *loop, ev_timer *w, int events)
 {
-  if(++runs == SLEEPS)
-    oi_thread_pool_detach(task->pool->loop, task->pool);
-  free(task);
+  assert(0 && "timeout before all sleeping tasks were complete!");
 }
 
 int
 main()
 {
   struct ev_loop *loop = ev_default_loop(0);
-  oi_thread_pool pool;
+  oi_async async;
+  ev_timer timer;
   int i;
 
-  oi_thread_pool_init(&pool);
-
+  oi_async_init(&async);
   for(i = 0; i < SLEEPS; i++) {
-    oi_thread_pool_task *task = malloc(sizeof(oi_thread_pool_task));
-    task->run = run;
-    task->done = done;
-    oi_thread_pool_execute(&pool, task);
+    oi_task *task = malloc(sizeof(oi_task));
+    oi_task_init_sleep(task, done, 1);
+    task->data = &timer;
+    oi_async_submit(&async, task);
   }
+  oi_async_attach(loop, &async);
 
-  oi_thread_pool_attach(loop, &pool);
+  
+  ev_timer_init (&timer, on_timeout, 1.2, 0.);
+  ev_timer_start (loop, &timer);
+
   ev_loop(loop, 0);
+
+  oi_async_deinit(&async);
 
   assert(runs == SLEEPS);
 

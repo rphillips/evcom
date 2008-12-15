@@ -72,6 +72,7 @@ execute_task(oi_task *t)
     case OI_TASK_READ:  P3(read, fd, buf, count);
     case OI_TASK_WRITE: P3(write, fd, buf, count);
     case OI_TASK_CLOSE: P1(close, fd);
+    case OI_TASK_SLEEP: P1(sleep, seconds);
     default: 
      // t->result = -1;
       break;
@@ -202,6 +203,7 @@ on_completion(struct ev_loop *loop, ev_async *watcher, int revents)
       case OI_TASK_READ:  done_cb(read);
       case OI_TASK_WRITE: done_cb(write);
       case OI_TASK_CLOSE: done_cb(close);
+      case OI_TASK_SLEEP: done_cb(sleep);
     }
     /* the task is possibly freed by callback. do not access it again. */
   }
@@ -224,7 +226,7 @@ oi_async_init (oi_async *async)
 }
 
 void
-oi_async_destroy (oi_async *async)
+oi_async_deinit (oi_async *async)
 {
   pthread_mutex_destroy(&async->lock);
 }

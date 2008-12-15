@@ -57,6 +57,12 @@ struct oi_task {
       void (*cb) (oi_task *, int result);
       int result;
     } close;
+
+    struct {
+      unsigned int seconds;
+      void (*cb) (oi_task *, unsigned int result);
+      unsigned int result;
+    } sleep;
     
   } params;
 
@@ -69,7 +75,7 @@ struct oi_task {
 }; 
 
 void oi_async_init    (oi_async *);
-void oi_async_destroy (oi_async *);
+void oi_async_deinit  (oi_async *);
 void oi_async_attach  (struct ev_loop *loop, oi_async *);
 void oi_async_detach  (oi_async *);
 void oi_async_submit  (oi_async *, oi_task *);
@@ -77,18 +83,15 @@ void oi_async_submit  (oi_async *, oi_task *);
 /* To submit a task for async processing
  * (0) allocate memory for your task
  * (1) initialize the task with one of the functions below
- * (2) set task->done() callback and optionally the task->data pointer
+ * (2) optionally set the task->data pointer
  * (3) oi_async_submit() the task 
  */
-void oi_task_open   (oi_task *, const char *pathname, int flags, mode_t mode);
-void oi_task_read   (oi_task *, int fd, void *buf, size_t count);
-void oi_task_write  (oi_task *, int fd, const void *buf, size_t count);
-void oi_task_close  (oi_task *, int fd);
 
 enum { OI_TASK_OPEN
      , OI_TASK_READ
      , OI_TASK_WRITE
      , OI_TASK_CLOSE
+     , OI_TASK_SLEEP
      };
 
 #define oi_task_init_common(task) do {\
@@ -128,6 +131,13 @@ enum { OI_TASK_OPEN
   (task)->type = OI_TASK_CLOSE; \
   (task)->params.close.cb = _cb; \
   (task)->params.close.fd = _fd; \
+} while(0)
+
+#define oi_task_init_sleep(task, _cb, _seconds) do { \
+  oi_task_init_common(task); \
+  (task)->type = OI_TASK_SLEEP; \
+  (task)->params.sleep.cb = _cb; \
+  (task)->params.sleep.seconds = _seconds; \
 } while(0)
 
 #endif /* oi_async_h */
