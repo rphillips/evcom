@@ -1,14 +1,9 @@
 PREFIX = $(HOME)/local/oi
 
-# libev
+# libev (Must be compiled with EV_MULTIPLICITY=1 - the default)
 EVINC  = $(HOME)/local/libev/include
 EVLIB  = $(HOME)/local/libev/lib
 EVLIBS = -L${EVLIB} -lev
-
-# libeio
-EIOINC  = $(HOME)/local/libeio/include
-EIOLIB  = $(HOME)/local/libeio/lib
-EIOLIBS = -L${EIOLIB} -leio
 
 # GnuTLS, comment out if you don't want it
 GNUTLSLIB   = /usr/lib
@@ -17,8 +12,8 @@ GNUTLSLIBS  = -L${GNUTLSLIB} -lgnutls
 GNUTLSFLAGS = -DHAVE_GNUTLS
 
 # includes and libs
-INCS = -I${EIOINC} -I${EVINC} -I${GNUTLSINC}
-LIBS =   ${EIOLIBS}  ${EVLIBS}  ${GNUTLSLIBS} # -lefence
+INCS = -I${EVINC} -I${GNUTLSINC}
+LIBS =   ${EVLIBS}  ${GNUTLSLIBS} -pthread #-lefence
 
 # flags
 CPPFLAGS = -DVERSION=\"$(VERSION)\" ${GNUTLSFLAGS}

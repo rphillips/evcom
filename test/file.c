@@ -17,7 +17,8 @@ static  oi_file out;
 static void
 on_open(oi_file *f)
 {
-#define OPEN_MSG "\nopened the file\n~~~~~~~~~~~~~~~~~~~~~~\n"
+  printf("on open\n");
+# define OPEN_MSG "\nopened the file\n~~~~~~~~~~~~~~~~~~~~~~\n"
   oi_file_write_simple(&out, OPEN_MSG, sizeof(OPEN_MSG));
   
   int r = oi_file_read_simple(f, 100);
@@ -27,7 +28,7 @@ on_open(oi_file *f)
 static void
 on_close(oi_file *f)
 {
-#define CLOSE_MSG "\n~~~~~~~~~~~~~~~~~~~~~~\nclosed the file\n"
+# define CLOSE_MSG "\n~~~~~~~~~~~~~~~~~~~~~~\nclosed the file\n"
   oi_file_write_simple(&out, CLOSE_MSG, sizeof(CLOSE_MSG));
   oi_file_detach(f);  
   out.on_drain = oi_file_detach;

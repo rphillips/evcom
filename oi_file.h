@@ -1,6 +1,6 @@
 #include "oi.h"
+#include "oi_async.h"
 #include "ngx_queue.h"
-#include <eio.h>
 #include <ev.h>
 
 #ifndef oi_file_h
@@ -28,14 +28,14 @@ void oi_file_close        (oi_file *);
 struct oi_file {
   /* private */
   int fd;
-  ev_async thread_pool_result_watcher;
+  oi_async async;
+  oi_task io_task;
   struct ev_loop *loop;
-  struct eio_queue task_queue;
   ngx_queue_t write_queue;
   oi_buf *read_buf;
   oi_buf *write_buf;
   oi_socket *write_socket;
-    
+   
   /* public */
   void (*on_open)      (oi_file *);
   void (*on_read)      (oi_file *, oi_buf *, size_t recved);
