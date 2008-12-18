@@ -36,11 +36,6 @@ oi_file_init (oi_file *file)
   return 0;
 }
 
-/* TODO this is not good enough buf->base is a pointer its not contained
- * in the structure! 
- */
-#define get_buf_from_base(ptr) (oi_buf*) ((unsigned char *) (ptr) - offsetof(oi_buf, base))
-
 static void
 after_read(oi_task *task, ssize_t recved)
 {
@@ -114,7 +109,7 @@ after_open(oi_task *task, int result)
   oi_file *file = task->data;
 
   if(result == -1) {
-    printf("file opened: error!\n");
+    perror("open()");
     return;
   }
 
@@ -310,3 +305,44 @@ oi_file_close (oi_file *file)
   file->io_task.data = file;
   oi_async_submit(&file->async, &file->io_task);
 }
+
+static void
+after_sendfile(oi_task *task, ssize_t sent)
+{
+  oi_file *file = task->data;
+  oi_socket *socket = file->write_socket;
+  assert(socket != NULL);
+  file->write_socket = NULL;
+
+  if(sent == -1) {
+    printf("sendfile: error!\n");
+    return;
+  }
+
+  if(socket->on_drain) {
+    socket->on_drain(socket);
+  }
+
+}
+
+int
+oi_file_send (oi_file *source, oi_socket *destination, off_t offset, size_t count)
+{
+  // (1) make sure the write queue on the socket is cleared.
+  // 
+  // (2)
+  // 
+  assert(source->write_socket == NULL);
+  source->write_socket = destination;
+  oi_task_init_sendfile ( &source->io_task
+                        , after_sendfile
+                        , destination->fd
+                        , source->fd
+                        , offset
+                        , count
+                        );
+  source->io_task.data = source;
+  oi_async_submit(&source->async, &source->io_task);
+  return -1;
+}
+

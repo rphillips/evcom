@@ -682,6 +682,7 @@ oi_server_close(oi_server *server)
   if(server->listening) {
     oi_server_detach(server);
     close(server->fd);
+    /* TODO do this on the loop? check return value? */
     server->listening = FALSE;
   }
 }
@@ -779,6 +780,11 @@ on_io_event(struct ev_loop *loop, ev_io *watcher, int revents)
       have_write_event = FALSE;
     }
 
+
+    if(socket->read_watcher.active == FALSE)
+      have_read_event = FALSE;
+    if(socket->write_watcher.active == FALSE)
+      have_write_event = FALSE;
   }
 
   if(socket->write_action == NULL && socket->read_action == NULL)
@@ -956,6 +962,7 @@ void
 oi_socket_read_stop (oi_socket *socket)
 {
   ev_io_stop(socket->loop, &socket->read_watcher);
+  ev_clear_pending (socket->loop, &socket->read_watcher);
 }
 
 void
@@ -963,11 +970,13 @@ oi_socket_read_start (oi_socket *socket)
 {
   if(socket->read_action) {
     ev_io_start(socket->loop, &socket->read_watcher);
+    /* XXX feed event? */
   }
 }
 
 /* for now host is only allowed to be an IP address 
  * ie no dns lookup
+ * TODO dns lookup
  */
 int
 oi_socket_open_tcp (oi_socket *s, const char *host, int port)

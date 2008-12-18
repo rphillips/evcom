@@ -16,7 +16,7 @@ INCS = -I${EVINC} -I${GNUTLSINC}
 LIBS =   ${EVLIBS}  ${GNUTLSLIBS} -pthread #-lefence
 
 # flags
-CPPFLAGS = -DVERSION=\"$(VERSION)\" ${GNUTLSFLAGS}
+CPPFLAGS = -DVERSION=\"$(VERSION)\" ${GNUTLSFLAGS} -D__linux=1 -DHAVE_SENDFILE=1
 CFLAGS   = -g -Wall ${INCS} ${CPPFLAGS} -fPIC # -O2 
 LDFLAGS  = -s ${LIBS}
 LDOPT    = -shared

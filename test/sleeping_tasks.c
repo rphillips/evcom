@@ -7,7 +7,7 @@
 #define SLEEPS 4
 static int runs = 0;
 
-void
+static void
 done (oi_task *task, unsigned int result)
 {
   assert(result == 0);

@@ -8,11 +8,29 @@
 #include <assert.h>
 #include <pthread.h>
 
+#if HAVE_SENDFILE
+# if __linux
+#  include <sys/sendfile.h>
+# elif __freebsd
+#  include <sys/socket.h>
+#  include <sys/uio.h>
+# elif __hpux
+#  include <sys/socket.h>
+# elif __solaris /* not yet */
+#  include <sys/sendfile.h>
+# else
+#  error sendfile support requested but not available
+# endif
+#endif
+
 #include <ev.h>
 #include "oi_async.h"
 #include "ngx_queue.h"
 
-#define NWORKERS 4 /* TODO make adjustable */
+#define NWORKERS 4 
+/* TODO make adjustable 
+ * once it is fix sleeping_tasks
+ */
 
 static int active_watchers = 0;
 static int active_workers = 0;
@@ -25,6 +43,153 @@ struct worker {
   pthread_t thread;
   pthread_attr_t thread_attr;
 };
+
+/* Sendfile and pread emulation come from Marc Lehmann's libeio */
+
+#if !HAVE_PREADWRITE
+/*
+ * make our pread/pwrite emulation safe against themselves, but not against
+ * normal read/write by using a mutex. slows down execution a lot,
+ * but that's your problem, not mine.
+ */
+static pthread_mutex_t preadwritelock = PTHREAD_MUTEX_INITIALIZER;
+#endif
+
+#if !HAVE_PREADWRITE
+# undef pread
+# undef pwrite
+# define pread  eio__pread
+# define pwrite eio__pwrite
+
+static ssize_t
+eio__pread (int fd, void *buf, size_t count, off_t offset)
+{
+  ssize_t res;
+  off_t ooffset;
+
+  pthread_mutex_lock(&preadwritelock);
+    ooffset = lseek (fd, 0, SEEK_CUR);
+    lseek (fd, offset, SEEK_SET);
+    res = read (fd, buf, count);
+    lseek (fd, ooffset, SEEK_SET);
+  pthread_mutex_unlock(&preadwritelock);
+
+  return res;
+}
+
+static ssize_t
+eio__pwrite (int fd, void *buf, size_t count, off_t offset)
+{
+  ssize_t res;
+  off_t ooffset;
+
+  pthread_mutex_lock(&preadwritelock);
+    ooffset = lseek (fd, 0, SEEK_CUR);
+    lseek (fd, offset, SEEK_SET);
+    res = write (fd, buf, count);
+    lseek (fd, offset, SEEK_SET);
+  pthread_mutex_unlock(&preadwritelock);
+
+  return res;
+}
+#endif
+
+
+/* sendfile always needs emulation */
+static ssize_t
+eio__sendfile (int ofd, int ifd, off_t offset, size_t count)
+{
+  ssize_t res;
+
+  if (!count)
+    return 0;
+
+#if HAVE_SENDFILE
+# if __linux
+  res = sendfile (ofd, ifd, &offset, count);
+
+# elif __freebsd
+  /*
+   * Of course, the freebsd sendfile is a dire hack with no thoughts
+   * wasted on making it similar to other I/O functions.
+   */
+  {
+    off_t sbytes;
+    res = sendfile (ifd, ofd, offset, count, 0, &sbytes, 0);
+
+    if (res < 0 && sbytes)
+      /* maybe only on EAGAIN: as usual, the manpage leaves you guessing */
+      res = sbytes;
+  }
+
+# elif __hpux
+  res = sendfile (ofd, ifd, offset, count, 0, 0);
+
+# elif __solaris
+  {
+    struct sendfilevec vec;
+    size_t sbytes;
+
+    vec.sfv_fd   = ifd;
+    vec.sfv_flag = 0;
+    vec.sfv_off  = offset;
+    vec.sfv_len  = count;
+
+    res = sendfilev (ofd, &vec, 1, &sbytes);
+
+    if (res < 0 && sbytes)
+      res = sbytes;
+  }
+
+# endif
+#else
+  res = -1;
+  errno = ENOSYS;
+#endif
+
+  if (res <  0
+    && (errno == ENOSYS || errno == EINVAL || errno == ENOTSOCK
+#if __solaris
+      || errno == EAFNOSUPPORT || errno == EPROTOTYPE
+#endif
+       )
+     )
+  {
+    /* emulate sendfile. this is a major pain in the ass */
+/* buffer size for various temporary buffers */
+#define EIO_BUFSIZE 65536
+    char *eio_buf = malloc (EIO_BUFSIZE);
+    errno = ENOMEM;
+    if (!eio_buf)
+      return -1;
+
+    res = 0;
+
+    while (count) {
+      ssize_t cnt;
+      
+      cnt = pread (ifd, eio_buf, count > EIO_BUFSIZE ? EIO_BUFSIZE : count, offset);
+
+      if (cnt <= 0) {
+        if (cnt && !res) res = -1;
+        break;
+      }
+
+      cnt = write (ofd, eio_buf, cnt);
+
+      if (cnt <= 0) {
+        if (cnt && !res) res = -1;
+        break;
+      }
+
+      offset += cnt;
+      res    += cnt;
+      count  -= cnt;
+    }
+  }
+
+  return res;
+}
 
 static oi_task*
 queue_shift(pthread_mutex_t *lock, ngx_queue_t *queue)
@@ -63,6 +228,15 @@ worker_free(struct worker *worker)
   break; \
 }
 
+#define P4(name,a,b,c,d) { \
+  t->params.name.result = name( t->params.name.a \
+                              , t->params.name.b \
+                              , t->params.name.c \
+                              , t->params.name.d \
+                              ); \
+  break; \
+}
+
 static void
 execute_task(oi_task *t)
 {
@@ -73,8 +247,9 @@ execute_task(oi_task *t)
     case OI_TASK_WRITE: P3(write, fd, buf, count);
     case OI_TASK_CLOSE: P1(close, fd);
     case OI_TASK_SLEEP: P1(sleep, seconds);
+    case OI_TASK_SENDFILE: P4(eio__sendfile, ofd, ifd, offset, count);
     default: 
-     // t->result = -1;
+      assert(0 && "unknown task type");
       break;
   }
   t->errorno = errno;
@@ -193,6 +368,7 @@ on_completion(struct ev_loop *loop, ev_async *watcher, int revents)
   while((task = queue_shift(&async->lock, &async->finished_tasks))) {
     assert(task->active);
     task->active = 0;
+    errno = task->errorno;
 #   define done_cb(kind) { \
       assert(task->params.kind.cb); \
       task->params.kind.cb(task, task->params.kind.result); \
@@ -204,6 +380,7 @@ on_completion(struct ev_loop *loop, ev_async *watcher, int revents)
       case OI_TASK_WRITE: done_cb(write);
       case OI_TASK_CLOSE: done_cb(close);
       case OI_TASK_SLEEP: done_cb(sleep);
+      case OI_TASK_SENDFILE: done_cb(eio__sendfile);
     }
     /* the task is possibly freed by callback. do not access it again. */
   }
@@ -293,3 +470,4 @@ oi_async_submit (oi_async *async, oi_task *task)
     dispatch_tasks(async);
   }
 }
+

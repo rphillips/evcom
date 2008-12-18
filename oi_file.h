@@ -27,7 +27,6 @@ void oi_file_close        (oi_file *);
 
 struct oi_file {
   /* private */
-  int fd;
   oi_async async;
   oi_task io_task;
   struct ev_loop *loop;
@@ -35,6 +34,9 @@ struct oi_file {
   oi_buf *read_buf;
   oi_buf *write_buf;
   oi_socket *write_socket;
+
+  /* read-only */
+  int fd;
    
   /* public */
   void (*on_open)      (oi_file *);

@@ -63,6 +63,15 @@ struct oi_task {
       void (*cb) (oi_task *, unsigned int result);
       unsigned int result;
     } sleep;
+
+    struct {
+      int ofd;
+      int ifd;
+      off_t offset;
+      size_t count;
+      void (*cb) (oi_task *, ssize_t result);
+      ssize_t result;
+    } eio__sendfile;
     
   } params;
 
@@ -92,6 +101,7 @@ enum { OI_TASK_OPEN
      , OI_TASK_WRITE
      , OI_TASK_CLOSE
      , OI_TASK_SLEEP
+     , OI_TASK_SENDFILE
      };
 
 #define oi_task_init_common(task) do {\
@@ -120,10 +130,10 @@ enum { OI_TASK_OPEN
 #define oi_task_init_write(task, _cb, _fd, _buf, _count) do { \
   oi_task_init_common(task); \
   (task)->type = OI_TASK_WRITE; \
-  (task)->params.read.cb = _cb; \
-  (task)->params.read.fd = _fd; \
-  (task)->params.read.buf = _buf; \
-  (task)->params.read.count = _count; \
+  (task)->params.write.cb = _cb; \
+  (task)->params.write.fd = _fd; \
+  (task)->params.write.buf = _buf; \
+  (task)->params.write.count = _count; \
 } while(0)
 
 #define oi_task_init_close(task, _cb, _fd) do { \
@@ -138,6 +148,16 @@ enum { OI_TASK_OPEN
   (task)->type = OI_TASK_SLEEP; \
   (task)->params.sleep.cb = _cb; \
   (task)->params.sleep.seconds = _seconds; \
+} while(0)
+
+#define oi_task_init_sendfile(task, _cb, _ofd, _ifd, _offset, _count) do { \
+  oi_task_init_common(task); \
+  (task)->type = OI_TASK_SENDFILE; \
+  (task)->params.eio__sendfile.cb = _cb; \
+  (task)->params.eio__sendfile.ofd = _ofd; \
+  (task)->params.eio__sendfile.ifd = _ifd; \
+  (task)->params.eio__sendfile.offset = _offset; \
+  (task)->params.eio__sendfile.count = _count; \
 } while(0)
 
 #endif /* oi_async_h */

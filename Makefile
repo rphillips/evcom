@@ -1,7 +1,7 @@
 include config.mk
 
-DEP = oi.h oi_file.h oi_async.h
-SRC = oi.c oi_file.c oi_async.c
+DEP = oi.h oi_async.h oi_file.h
+SRC = oi.c oi_async.c oi_file.c
 OBJ = ${SRC:.c=.o}
 
 VERSION = 0.1
@@ -11,7 +11,8 @@ OUTPUT_A=$(NAME).a
 
 LINKER=$(CC) $(LDOPT)
 
-all: options $(OUTPUT_LIB) $(OUTPUT_A) test/ping_pong test/connection_interruption test/file test/sleeping_tasks
+TESTS = test/test_ping_pong test/test_connection_interruption test/test_file test/test_sleeping_tasks test/test_fancy_copy
+all: options $(OUTPUT_LIB) $(OUTPUT_A) $(TESTS)
 
 options:
 	@echo ${NAME} build options:
@@ -43,55 +44,60 @@ FAIL=echo "\033[1;31mFAIL\033[m"
 PASS=echo "\033[1;32mPASS\033[m"
 TEST= && $(PASS) || $(FAIL)
 
-test: test/ping_pong test/connection_interruption test/sleeping_tasks
+test: $(TESTS)
 	@echo "ping pong"
 	@echo -n "- unix: "
-	@./test/ping_pong unix $(TEST)
+	@./test/test_ping_pong unix $(TEST)
 	@echo -n "- tcp: "
-	@./test/ping_pong tcp $(TEST)
+	@./test/test_ping_pong tcp $(TEST)
 	@echo -n "- unix secure: "
-	@./test/ping_pong unix secure $(TEST)
+	@./test/test_ping_pong unix secure $(TEST)
 	@echo -n "- tcp secure: "
-	@./test/ping_pong tcp secure $(TEST)
+	@./test/test_ping_pong tcp secure $(TEST)
 	@echo "connection interruption"
 	@echo -n "- unix: "
-	@./test/connection_interruption unix $(TEST)
+	@./test/test_connection_interruption unix $(TEST)
 	@echo -n "- tcp: "
-	@./test/connection_interruption tcp $(TEST)
+	@./test/test_connection_interruption tcp $(TEST)
 	@echo -n "- unix secure: "
-	@./test/connection_interruption unix secure $(TEST)
+	@./test/test_connection_interruption unix secure $(TEST)
 	@echo -n "- tcp secure: "
-	@./test/connection_interruption tcp secure $(TEST)
+	@./test/test_connection_interruption tcp secure $(TEST)
 	@echo -n "sleeping tasks: "
-	@./test/sleeping_tasks $(TEST)
+	@./test/test_sleeping_tasks $(TEST)
+	@echo -n "fancy copy copy: "
+	@rm /tmp/oi_fancy_copy_*
+	@perl -e "print('C'x(1024*40))" > /tmp/oi_fancy_copy_src
+	@./test/test_fancy_copy /tmp/oi_fancy_copy_src /tmp/oi_fancy_copy_dst $(TEST)
+	md5sum /tmp/oi_fancy_copy*
 
 
-test/ping_pong: test/ping_pong.c $(OUTPUT_A)
-	@echo BUILDING test/ping_pong
+
+test/test_ping_pong: test/ping_pong.c $(OUTPUT_A)
+	@echo BUILDING $@
 	@$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
 
-test/connection_interruption: test/connection_interruption.c $(OUTPUT_A)
-	@echo BUILDING test/connection_interruption
+test/test_connection_interruption: test/connection_interruption.c $(OUTPUT_A)
+	@echo BUILDING $@
 	@$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
 
-test/fancy_copy: test/fancy_copy.c $(OUTPUT_A)
-	@echo BUILDING test/fancy_copy
+test/test_file: test/file.c $(OUTPUT_A)
+	@echo BUILDING $@
 	@$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
 
-test/file: test/file.c $(OUTPUT_A)
-	@echo BUILDING test/file
+test/test_sleeping_tasks: test/sleeping_tasks.c $(OUTPUT_A)
+	@echo BUILDING $@
 	@$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
 
-test/sleeping_tasks: test/sleeping_tasks.c $(OUTPUT_A)
-	@echo BUILDING test/sleeping_tasks
+test/test_fancy_copy: test/fancy_copy.c $(OUTPUT_A)
+	@echo BUILDING $@
 	@$(CC) -I. $(LIBS) $(CFLAGS) -lev -o $@ $^
+
 
 clean:
 	@echo CLEANING
 	@rm -f ${OBJ} $(OUTPUT_A) $(OUTPUT_LIB) $(NAME)-${VERSION}.tar.gz 
-	@rm -f test/ping_pong test/connection_interruption test/fancy_copy test/file
-	@rm -f test/sleeping_tasks
-
+	@rm -f test/test_*
 
 install: $(OUTPUT_LIB) $(OUTPUT_A)
 	@echo INSTALLING ${OUTPUT_A} and ${OUTPUT_LIB} to ${PREFIX}/lib

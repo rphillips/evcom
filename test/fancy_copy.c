@@ -42,15 +42,27 @@ static oi_server server;
 static oi_socket connection;
 static int got_connection = 0;
 
+static char *src_filename;
+static char *dst_filename;
+
+static void
+file_error(oi_file *_)
+{
+  assert(0);
+}
+
 static void
 on_file_dst_open (oi_file *_)
 {
+  assert(connection.fd > 0);
   oi_socket_read_start(&connection);
+  //printf("file_dst is open\n");
 }
 
 static void
 on_file_dst_close (oi_file *_)
 {
+  //printf("file dst closed\n");
   oi_file_detach(&file_dst);
 }
 
@@ -72,7 +84,7 @@ on_connection_connect (oi_socket *_)
   oi_file_init(&file_dst);
   file_dst.on_open  = on_file_dst_open;
   file_dst.on_close = on_file_dst_close;
-  oi_file_open_path(&file_dst, "/tmp/oi_test_dst", O_CREAT, 0);
+  oi_file_open_path(&file_dst, dst_filename, O_WRONLY | O_CREAT, 0644);
   oi_file_attach(&file_dst, loop);
 
   oi_socket_read_stop(&connection);
@@ -94,6 +106,8 @@ static void
 on_connection_close (oi_socket *_)
 {
   oi_socket_detach(&connection);
+  oi_server_close(&server);
+  oi_server_detach(&server);
 }
 
 static oi_socket* 
@@ -127,21 +141,24 @@ on_client_error (oi_socket *_, int domain, int code)
 static void
 on_client_connect (oi_socket *_)
 {
-  if(file_src.fd > 0) 
-    oi_file_send(&file_src, &client); 
+  if(file_src.fd > 0) {
+    oi_file_send(&file_src, &client, 0, 50*1024); 
+  }
+}
+
+static void
+on_client_drain (oi_socket *_)
+{
+  oi_socket_close(&client);
+  oi_file_close(&file_src);
 }
 
 static void
 on_file_src_open (oi_file *_)
 {
-  if(client.fd > 0) 
-    oi_file_send(&file_src, &client); 
-}
-
-static void
-on_client_close (oi_socket *_)
-{
-  oi_socket_detach(&client);
+  if(client.fd > 0)  {
+    oi_file_send(&file_src, &client, 0, 50*1024); 
+  }
 }
 
 static void
@@ -150,17 +167,18 @@ on_client_timeout (oi_socket *_)
   exit(1);
 }
 
-static void
-on_file_src_close (oi_file *file)
-{
-  oi_file_detach(file);
-}
-
 int
-main()
+main(int argc, char *argv[])
 {
   int r; 
   loop = ev_default_loop(0);
+
+  assert(argc == 3);
+  src_filename = argv[1];
+  dst_filename = argv[2];
+
+  assert(strlen(src_filename) > 0);
+  assert(strlen(dst_filename) > 0);
 
   oi_server_init(&server, 10);
   server.on_connection = on_server_connection;
@@ -172,18 +190,18 @@ main()
   client.on_read    = on_client_read;
   client.on_error   = on_client_error;
   client.on_connect = on_client_connect;
-  client.on_close   = on_client_close;
   client.on_timeout = on_client_timeout;
-  client.on_drain   = oi_socket_close;
+  client.on_close   = oi_socket_detach;
+  client.on_drain   = on_client_drain;
   r = oi_socket_open_tcp(&client, HOST, PORT);
   assert(r >= 0 && "problem connecting");
   oi_socket_attach(&client, loop);
 
   oi_file_init(&file_src);
   file_src.on_open = on_file_src_open;
-  file_src.on_drain = oi_file_close;
-  file_src.on_close = on_file_src_close;
-  oi_file_open_path(&file_src, "/tmp/oi_test_src", O_CREAT, 0);
+  file_src.on_drain = file_error;
+  file_src.on_close = oi_file_detach;
+  oi_file_open_path(&file_src, src_filename, O_RDONLY, 0700);
   oi_file_attach(&file_src, loop);
 
   ev_loop(loop, 0);
