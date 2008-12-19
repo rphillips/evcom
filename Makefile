@@ -1,7 +1,7 @@
 include config.mk
 
-DEP = oi.h oi_async.h oi_file.h
-SRC = oi.c oi_async.c oi_file.c
+DEP = oi_socket.h oi_async.h oi_file.h oi_queue.h
+SRC = oi_socket.c oi_async.c oi_file.c
 OBJ = ${SRC:.c=.o}
 
 VERSION = 0.1
@@ -66,7 +66,7 @@ test: $(TESTS)
 	@echo -n "sleeping tasks: "
 	@./test/test_sleeping_tasks $(TEST)
 	@echo -n "fancy copy copy: "
-	@rm /tmp/oi_fancy_copy_*
+	@rm -f /tmp/oi_fancy_copy_*
 	@perl -e "print('C'x(1024*40))" > /tmp/oi_fancy_copy_src
 	@./test/test_fancy_copy /tmp/oi_fancy_copy_src /tmp/oi_fancy_copy_dst $(TEST)
 	md5sum /tmp/oi_fancy_copy*

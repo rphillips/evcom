@@ -7,7 +7,8 @@
 
 #include "oi_file.h"
 #include "oi_async.h"
-#include "ngx_queue.h"
+#include "oi_socket.h"
+#include "oi_queue.h"
 
 #define RELEASE_BUF(buf) if(buf->release) { buf->release(buf); }
 #define DRAIN_CB(file)   if(file->on_drain) { file->on_drain(file); }
@@ -21,7 +22,7 @@ oi_file_init (oi_file *file)
   oi_async_init(&file->async);
   file->async.data = file;
 
-  ngx_queue_init(&file->write_queue);
+  oi_queue_init(&file->write_queue);
 
   file->fd = -1;
   file->loop = NULL;
@@ -202,7 +203,7 @@ after_write(oi_task *task, ssize_t result)
   RELEASE_BUF(file->write_buf);
   file->write_buf = NULL;
 
-  if(ngx_queue_empty(&file->write_queue)) {
+  if(oi_queue_empty(&file->write_queue)) {
     DRAIN_CB(file);
   } else {
     dispatch_write_buf(file);
@@ -216,12 +217,12 @@ dispatch_write_buf(oi_file *file)
 {
   if(file->write_buf != NULL)
     return;
-  if(ngx_queue_empty(&file->write_queue)) 
+  if(oi_queue_empty(&file->write_queue)) 
     return;
 
-  ngx_queue_t *q = ngx_queue_last(&file->write_queue);
-  ngx_queue_remove(q);
-  oi_buf *buf = file->write_buf = ngx_queue_data(q, oi_buf, queue);
+  oi_queue_t *q = oi_queue_last(&file->write_queue);
+  oi_queue_remove(q);
+  oi_buf *buf = file->write_buf = oi_queue_data(q, oi_buf, queue);
 
   assert(!file->io_task.active);
   oi_task_init_write ( &file->io_task
@@ -239,7 +240,7 @@ oi_file_write (oi_file *file, oi_buf *buf)
 {
   assert(file->fd >= 0 && "file not open!");
   buf->written = 0;
-  ngx_queue_insert_head(&file->write_queue, &buf->queue);
+  oi_queue_insert_head(&file->write_queue, &buf->queue);
   dispatch_write_buf(file);
 }
 
@@ -262,10 +263,10 @@ oi_file_write_simple (oi_file *file, const char *str, size_t len)
 static void
 clear_write_queue(oi_file *file)
 {
-  while(!ngx_queue_empty(&file->write_queue)) {
-    ngx_queue_t *q = ngx_queue_last(&file->write_queue);
-    ngx_queue_remove(q);
-    oi_buf *buf = ngx_queue_data(q, oi_buf, queue);
+  while(!oi_queue_empty(&file->write_queue)) {
+    oi_queue_t *q = oi_queue_last(&file->write_queue);
+    oi_queue_remove(q);
+    oi_buf *buf = oi_queue_data(q, oi_buf, queue);
     RELEASE_BUF(buf);
   }
 }
@@ -275,7 +276,7 @@ after_close(oi_task *task, int result)
 {
   oi_file *file = task->data;
 
-  assert(ngx_queue_empty(&file->write_queue));
+  assert(oi_queue_empty(&file->write_queue));
 
   if(result == -1) {
     perror("close()");

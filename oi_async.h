@@ -1,6 +1,6 @@
 #include <ev.h>
 #include <pthread.h>
-#include "ngx_queue.h"
+#include "oi_queue.h"
 
 #ifndef oi_async_h
 #define oi_async_h
@@ -14,8 +14,8 @@ struct oi_async {
   struct ev_loop *loop;
 
   pthread_mutex_t lock; /* for finished_tasks */
-  ngx_queue_t finished_tasks;
-  ngx_queue_t new_tasks;
+  oi_queue_t finished_tasks;
+  oi_queue_t new_tasks;
 
   /* public */
   void *data;
@@ -24,7 +24,7 @@ struct oi_async {
 struct oi_task {
   /* private */
   oi_async *async;
-  ngx_queue_t queue;
+  oi_queue_t queue;
   int type;
   union {
 

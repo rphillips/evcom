@@ -12,8 +12,8 @@
 #include <arpa/inet.h>
 
 #include <ev.h>
-#include "ngx_queue.h"
-#include "oi.h"
+#include "oi_queue.h"
+#include "oi_socket.h"
  
 #ifdef HAVE_GNUTLS
 # include <gnutls/gnutls.h>
@@ -88,20 +88,20 @@ half_close(oi_socket *socket)
 static void
 update_write_buffer_after_send(oi_socket *socket, ssize_t sent)
 {
-  ngx_queue_t *q = ngx_queue_last(&socket->out_stream);
-  oi_buf *to_write = ngx_queue_data(q, oi_buf, queue);
+  oi_queue_t *q = oi_queue_last(&socket->out_stream);
+  oi_buf *to_write = oi_queue_data(q, oi_buf, queue);
   to_write->written += sent;
   socket->written += sent;
 
   if(to_write->written == to_write->len) {
 
-    ngx_queue_remove(q);
+    oi_queue_remove(q);
 
     if(to_write->release) {
       to_write->release(to_write);
     }  
 
-    if(ngx_queue_empty(&socket->out_stream)) {
+    if(oi_queue_empty(&socket->out_stream)) {
       ev_io_stop(socket->loop, &socket->write_watcher);
       if(socket->on_drain)
         socket->on_drain(socket);
@@ -171,13 +171,13 @@ secure_socket_send(oi_socket *socket)
 {
   ssize_t sent;
 
-  if(ngx_queue_empty(&socket->out_stream)) {
+  if(oi_queue_empty(&socket->out_stream)) {
     ev_io_stop(socket->loop, &socket->write_watcher);
     return OI_AGAIN;
   }
 
-  ngx_queue_t *q = ngx_queue_last(&socket->out_stream);
-  oi_buf *to_write = ngx_queue_data(q, oi_buf, queue);
+  oi_queue_t *q = oi_queue_last(&socket->out_stream);
+  oi_buf *to_write = oi_queue_data(q, oi_buf, queue);
 
   assert(socket->secure);
 
@@ -350,13 +350,13 @@ socket_send(oi_socket *socket)
     return OI_OKAY;
   }
 
-  if(ngx_queue_empty(&socket->out_stream)) {
+  if(oi_queue_empty(&socket->out_stream)) {
     ev_io_stop(socket->loop, &socket->write_watcher);
     return OI_AGAIN;
   }
 
-  ngx_queue_t *q = ngx_queue_last(&socket->out_stream);
-  oi_buf *to_write = ngx_queue_data(q, oi_buf, queue);
+  oi_queue_t *q = oi_queue_last(&socket->out_stream);
+  oi_buf *to_write = oi_queue_data(q, oi_buf, queue);
   
   int flags = 0;
 #ifdef MSG_NOSIGNAL
@@ -739,10 +739,10 @@ on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
 static void
 release_write_buffer(oi_socket *socket)
 {
-  while(!ngx_queue_empty(&socket->out_stream)) {
-    ngx_queue_t *q = ngx_queue_last(&socket->out_stream);
-    oi_buf *buf = ngx_queue_data(q, oi_buf, queue);
-    ngx_queue_remove(q);
+  while(!oi_queue_empty(&socket->out_stream)) {
+    oi_queue_t *q = oi_queue_last(&socket->out_stream);
+    oi_buf *buf = oi_queue_data(q, oi_buf, queue);
+    oi_queue_remove(q);
     if(buf->release) { buf->release(buf); }
   }
 }
@@ -815,7 +815,7 @@ oi_socket_init(oi_socket *socket, float timeout)
   socket->loop = NULL;
   socket->connected = FALSE;
 
-  ngx_queue_init(&socket->out_stream);
+  oi_queue_init(&socket->out_stream);
 
   ev_init (&socket->write_watcher, on_io_event);
   socket->write_watcher.data = socket;
@@ -915,7 +915,7 @@ oi_socket_write(oi_socket *socket, oi_buf *buf)
   if(socket->write_action == NULL)
     return;
 
-  ngx_queue_insert_head(&socket->out_stream, &buf->queue);
+  oi_queue_insert_head(&socket->out_stream, &buf->queue);
 
   buf->written = 0;
   ev_io_start(socket->loop, &socket->write_watcher);

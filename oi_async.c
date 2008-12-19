@@ -25,7 +25,7 @@
 
 #include <ev.h>
 #include "oi_async.h"
-#include "ngx_queue.h"
+#include "oi_queue.h"
 
 #define NWORKERS 4 
 /* TODO make adjustable 
@@ -35,7 +35,7 @@
 static int active_watchers = 0;
 static int active_workers = 0;
 static int readiness_pipe[2] = {-1, -1};
-static ngx_queue_t waiting_tasks;
+static oi_queue_t waiting_tasks;
 static pthread_mutex_t queue_lock = PTHREAD_MUTEX_INITIALIZER;
 
 struct worker {
@@ -192,20 +192,20 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count)
 }
 
 static oi_task*
-queue_shift(pthread_mutex_t *lock, ngx_queue_t *queue)
+queue_shift(pthread_mutex_t *lock, oi_queue_t *queue)
 {
-  ngx_queue_t *last = NULL;
+  oi_queue_t *last = NULL;
   pthread_mutex_lock(lock);
-    if(!ngx_queue_empty(queue)) {
-      last = ngx_queue_last(queue);
-      ngx_queue_remove(last); 
+    if(!oi_queue_empty(queue)) {
+      last = oi_queue_last(queue);
+      oi_queue_remove(last); 
     }
   pthread_mutex_unlock(lock);
 
   if(last == NULL) 
     return NULL;
 
-  return ngx_queue_data(last, oi_task, queue);
+  return oi_queue_data(last, oi_task, queue);
 }
 
 static void
@@ -281,7 +281,7 @@ attempt_to_get_a_task(struct worker *worker)
   oi_async *async = task->async;
   assert(async != NULL);
   pthread_mutex_lock(&async->lock);
-    ngx_queue_insert_head(&async->finished_tasks, &task->queue);
+    oi_queue_insert_head(&async->finished_tasks, &task->queue);
   pthread_mutex_unlock(&async->lock);
   ev_async_send(async->loop, &async->watcher);
   worker->task = NULL;
@@ -348,7 +348,7 @@ start_workers()
     worker_new();
   }
 
-  ngx_queue_init(&waiting_tasks);
+  oi_queue_init(&waiting_tasks);
 }
 
 /*
@@ -391,8 +391,8 @@ oi_async_init (oi_async *async)
 {
   ev_async_init(&async->watcher, on_completion);
 
-  ngx_queue_init(&async->finished_tasks);
-  ngx_queue_init(&async->new_tasks);
+  oi_queue_init(&async->finished_tasks);
+  oi_queue_init(&async->new_tasks);
 
   /* FIXME */
   pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -411,14 +411,14 @@ oi_async_deinit (oi_async *async)
 static void
 dispatch_tasks(oi_async *async)
 {
-  while(!ngx_queue_empty(&async->new_tasks)) {
-    ngx_queue_t *last = ngx_queue_last(&async->new_tasks);
-    ngx_queue_remove(last);
-    oi_task *task = ngx_queue_data(last, oi_task, queue);
+  while(!oi_queue_empty(&async->new_tasks)) {
+    oi_queue_t *last = oi_queue_last(&async->new_tasks);
+    oi_queue_remove(last);
+    oi_task *task = oi_queue_data(last, oi_task, queue);
 
     // 1. add task to task queue.
     pthread_mutex_lock(&queue_lock);
-      ngx_queue_insert_head(&waiting_tasks, &task->queue);
+      oi_queue_insert_head(&waiting_tasks, &task->queue);
     pthread_mutex_unlock(&queue_lock);
     
     // 2. write byte to pipe
@@ -465,7 +465,7 @@ oi_async_submit (oi_async *async, oi_task *task)
   task->async = async;
   task->active = 1;
 
-  ngx_queue_insert_head(&async->new_tasks, &task->queue);
+  oi_queue_insert_head(&async->new_tasks, &task->queue);
   if(ev_is_active(&async->watcher)) {
     dispatch_tasks(async);
   }

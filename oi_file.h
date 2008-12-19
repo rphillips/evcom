@@ -1,6 +1,6 @@
-#include "oi.h"
+#include "oi_socket.h"
 #include "oi_async.h"
-#include "ngx_queue.h"
+#include "oi_queue.h"
 #include <ev.h>
 
 #ifndef oi_file_h
@@ -30,7 +30,7 @@ struct oi_file {
   oi_async async;
   oi_task io_task;
   struct ev_loop *loop;
-  ngx_queue_t write_queue;
+  oi_queue_t write_queue;
   oi_buf *read_buf;
   oi_buf *write_buf;
   oi_socket *write_socket;
