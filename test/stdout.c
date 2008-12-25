@@ -50,7 +50,7 @@ main()
   file.on_open = on_open;
   file.on_read = on_read;
   file.on_close = on_close;
-  oi_file_open_path(&file, "config.mk", O_RDONLY, 0);
+  oi_file_open_path(&file, "LICENSE", O_RDONLY, 0);
   oi_file_attach(&file, loop);
 
   oi_file_init(&out);

@@ -11,7 +11,7 @@ OUTPUT_A=$(NAME).a
 
 LINKER=$(CC) $(LDOPT)
 
-TESTS = test/test_ping_pong_tcp_secure test/test_ping_pong_unix_secure test/test_ping_pong_tcp_clear test/test_ping_pong_unix_clear test/test_connection_interruption_tcp_secure test/test_connection_interruption_unix_secure test/test_connection_interruption_tcp_clear test/test_connection_interruption_unix_clear test/test_file test/test_sleeping_tasks test/fancy_copy
+TESTS = test/test_ping_pong_tcp_secure test/test_ping_pong_unix_secure test/test_ping_pong_tcp_clear test/test_ping_pong_unix_clear test/test_connection_interruption_tcp_secure test/test_connection_interruption_unix_secure test/test_connection_interruption_tcp_clear test/test_connection_interruption_unix_clear test/test_stdout test/test_sleeping_tasks test/fancy_copy
 
 all: options $(OUTPUT_LIB) $(OUTPUT_A) $(TESTS)
 
@@ -90,7 +90,7 @@ test/test_connection_interruption_unix_clear: test/connection_interruption.c $(O
 	@$(CC) -I. $(LIBS) $(CFLAGS) -o $@ $^ -DTCP=0 -DSECURE=0
 
 
-test/test_file: test/file.c $(OUTPUT_A)
+test/test_stdout: test/stdout.c $(OUTPUT_A)
 	@echo BUILDING $@
 	@$(CC) -I. $(LIBS) $(CFLAGS) -o $@ $^
 
