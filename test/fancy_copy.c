@@ -2,7 +2,7 @@
  * and writing N characters to it. Once the first chunk is written, it opens
  * that file with another handle 
  *
- * /tmp/oi_test_src == /tmp/oi_test_dest
+ * /tmp/oi_test_src == /tmp/oi_test_dst
  *        |                  ^
  *        |                  |
  * stream |                  | write

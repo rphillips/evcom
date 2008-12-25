@@ -323,7 +323,7 @@ static struct worker*
 worker_new()
 {
   int r;
-  struct worker *worker = malloc(sizeof(struct worker));
+  struct worker *worker = calloc(sizeof(struct worker), 1);
   if(worker == NULL ) { return NULL; }
 
   worker->task = NULL;
@@ -424,7 +424,7 @@ static void
 dispatch_tasks(oi_async *async)
 {
   while(!oi_queue_empty(&async->new_tasks)) {
-    oi_queue_t *last = oi_queue_last(&async->new_tasks);
+      oi_queue_t *last = oi_queue_last(&async->new_tasks);
     oi_queue_remove(last);
     oi_task *task = oi_queue_data(last, oi_task, queue);
 

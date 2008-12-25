@@ -17,7 +17,6 @@ static  oi_file out;
 static void
 on_open(oi_file *f)
 {
-  printf("on open\n");
 # define OPEN_MSG "\nopened the file\n~~~~~~~~~~~~~~~~~~~~~~\n"
   oi_file_write_simple(&out, OPEN_MSG, sizeof(OPEN_MSG));
   
