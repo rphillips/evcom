@@ -406,18 +406,7 @@ oi_async_init (oi_async *async)
   oi_queue_init(&async->finished_tasks);
   oi_queue_init(&async->new_tasks);
 
-  /* FIXME */
-  pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-  async->lock = lock;
-
   async->watcher.data = async;
-  async->data = NULL;
-}
-
-void
-oi_async_deinit (oi_async *async)
-{
-  pthread_mutex_destroy(&async->lock);
 }
 
 static void
@@ -445,6 +434,10 @@ dispatch_tasks(oi_async *async)
 void
 oi_async_attach (struct ev_loop *loop, oi_async *async)
 {
+  /* FIXME */
+  pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+  async->lock = lock;
+
   if(active_watchers == 0) {
     start_workers();
   }
@@ -459,6 +452,7 @@ oi_async_attach (struct ev_loop *loop, oi_async *async)
 void
 oi_async_detach (oi_async *async)
 {
+  pthread_mutex_destroy(&async->lock);
   if(async->loop == NULL)
     return;
   ev_async_stop(async->loop, &async->watcher);

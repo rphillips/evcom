@@ -94,7 +94,6 @@ struct oi_task {
 }; 
 
 void oi_async_init    (oi_async *);
-void oi_async_deinit  (oi_async *);
 void oi_async_attach  (struct ev_loop *loop, oi_async *);
 void oi_async_detach  (oi_async *);
 void oi_async_submit  (oi_async *, oi_task *);

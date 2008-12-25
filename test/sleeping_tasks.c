@@ -48,8 +48,6 @@ main()
 
   ev_loop(loop, 0);
 
-  oi_async_deinit(&async);
-
   assert(runs == SLEEPS);
 
   return 0;
