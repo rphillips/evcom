@@ -12,18 +12,18 @@
 
 #define HOST "127.0.0.1"
 #define SOCKFILE "/tmp/oi.sock"
-#define PORT 5000
+#define PORT "5000"
 
 int nconnections; 
-static int is_secure = 0;
-static int is_tcp = 0;
 
 static void 
 on_peer_close(oi_socket *socket)
 {
   //printf("server connection closed\n");
 #ifdef HAVE_GNUTLS
-  if(is_secure) { gnutls_deinit(socket->session); }
+# if SECURE
+  gnutls_deinit(socket->session);
+# endif
 #endif
   free(socket);
 }
@@ -39,13 +39,6 @@ static void
 on_peer_timeout(oi_socket *socket)
 {
   fprintf(stderr, "peer connection timeout\n");
-  exit(1);
-}
-
-static void 
-on_peer_error(oi_socket *socket, int domain, int code)
-{
-  fprintf(stderr, "error on the peer socket: %s\n", oi_strerror(domain, code));
   exit(1);
 }
 

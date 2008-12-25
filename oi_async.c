@@ -44,7 +44,9 @@ struct worker {
   pthread_attr_t thread_attr;
 };
 
-/* Sendfile and pread emulation come from Marc Lehmann's libeio */
+/* Sendfile and pread emulation come from Marc Lehmann's libeio and are
+ * Copyright (C)2007,2008 Marc Alexander Lehmann.
+ */
 
 #if !HAVE_PREADWRITE
 /*
@@ -248,6 +250,14 @@ execute_task(oi_task *t)
     case OI_TASK_CLOSE: P1(close, fd);
     case OI_TASK_SLEEP: P1(sleep, seconds);
     case OI_TASK_SENDFILE: P4(eio__sendfile, ofd, ifd, offset, count);
+    case OI_TASK_GETADDRINFO:
+      t->params.getaddrinfo.result = 
+        getaddrinfo (  t->params.getaddrinfo.nodename
+                    ,  t->params.getaddrinfo.servname
+                    , &t->params.getaddrinfo.hints
+                    ,  t->params.getaddrinfo.res
+                    );
+      break;
     default: 
       assert(0 && "unknown task type");
       break;
@@ -335,6 +345,7 @@ error:
 static void
 start_workers()
 {
+  assert(active_watchers == 0);
   int r = pipe(readiness_pipe);
   if(r < 0) {
     perror("pipe()");
@@ -381,6 +392,7 @@ on_completion(struct ev_loop *loop, ev_async *watcher, int revents)
       case OI_TASK_CLOSE: done_cb(close);
       case OI_TASK_SLEEP: done_cb(sleep);
       case OI_TASK_SENDFILE: done_cb(eio__sendfile);
+      case OI_TASK_GETADDRINFO: done_cb(getaddrinfo);
     }
     /* the task is possibly freed by callback. do not access it again. */
   }

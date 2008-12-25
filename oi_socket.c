@@ -28,12 +28,12 @@
 # define FALSE 0
 #endif
 
-
 #define OI_OKAY  0
 #define OI_AGAIN 1
 #define OI_ERROR 2 
 
-#define MIN(a,b) (a < b ? a : b)
+#undef MIN
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
 
 #define RAISE_OI_ERROR(s, code)     { if(s->on_error) { s->on_error(s, OI_ERROR_DOMAIN_OI    , code); } }
 #define RAISE_SYSTEM_ERROR(s)       { if(s->on_error) { s->on_error(s, OI_ERROR_DOMAIN_SYSTEM, errno); } }
@@ -225,7 +225,7 @@ static int
 secure_socket_recv(oi_socket *socket)
 {
   char recv_buffer[TCP_MAXWIN];
-  size_t recv_buffer_size = MIN(TCP_MAXWIN, socket->max_chunksize);
+  size_t recv_buffer_size = MIN(TCP_MAXWIN, socket->chunksize);
   ssize_t recved;
 
   assert(socket->secure);
@@ -492,11 +492,11 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
     return;
   }
   
-  union oi_address address; /* connector's address information */
+  struct sockaddr address; /* connector's address information */
   socklen_t addr_len = sizeof(address);
   
   /* TODO accept all possible connections? currently: just one */
-  int fd = accept(server->fd, (struct sockaddr*) &address, &addr_len);
+  int fd = accept(server->fd, (struct sockaddr*)&address, &addr_len);
   if(fd < 0) {
     perror("accept()");
     return;
@@ -523,58 +523,33 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
 #endif
 
   socket->server = server;
-  memcpy(&socket->remote_address, &address, addr_len);
-
   assign_file_descriptor(socket, fd);
-
   oi_socket_attach(socket, loop);
 }
 
-static int 
-listen_on_fd(oi_server *server, const int fd)
+int
+oi_server_listen(oi_server *server, struct addrinfo *addrinfo)
 {
+  int fd = -1;
+  struct linger ling = {0, 0};
   assert(server->listening == FALSE);
 
-  if (listen(fd, server->max_connections) < 0) {
-    perror("listen()");
+  fd = socket( addrinfo->ai_family
+             , addrinfo->ai_socktype
+             , addrinfo->ai_protocol
+             );
+  if(fd < 0) {
+    perror("socket()");
     return -1;
   }
-  
 
   int flags = fcntl(fd, F_GETFL, 0);
   int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
   if(r < 0) {
-    /* TODO error report */
+    perror("fcntl()");
+    return -1;
   }
-  
-  server->fd = fd;
-  server->listening = TRUE;
-  
-  ev_io_set (&server->connection_watcher, server->fd, EV_READ);
-  
-  return server->fd;
-}
 
-
-/**
- * Begin the server listening on a file descriptor This DOES NOT start the
- * event loop. Start the event loop after making this call.
- *
- * FIXME For now only listening on any address. the host arg is ignored.
- */
-int 
-oi_server_listen_tcp(oi_server *server, const char *host, int port)
-{
-  int fd = -1;
-  struct linger ling = {0, 0};
-  int flags = 1;
-  int r;
-  
-  if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-    perror("socket()");
-    goto error;
-  }
-  
   flags = 1;
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *)&flags, sizeof(flags));
   setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&flags, sizeof(flags));
@@ -583,94 +558,26 @@ oi_server_listen_tcp(oi_server *server, const char *host, int port)
   /* XXX: Sending single byte chunks in a response body? Perhaps there is a
    * need to enable the Nagel algorithm dynamically. For now disabling.
    */
-  setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *)&flags, sizeof(flags));
-  
-  /* the memset call clears nonstandard fields in some impementations that
-   * otherwise mess things up.
-   */
-  memset(&server->address, 0, sizeof(union oi_address));
-  
-  server->address.in.sin_family = AF_INET;
-  server->address.in.sin_port = htons(port);
-  server->address.in.sin_addr.s_addr = htonl(INADDR_ANY);
+  //setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *)&flags, sizeof(flags));
 
-  r = bind( fd
-          , (struct sockaddr *)&server->address
-          , sizeof(server->address.in)
-          );
-  if (r < 0) {
+  if (bind(fd, addrinfo->ai_addr, addrinfo->ai_addrlen) < 0) {
     perror("bind()");
-    goto error;
-  }
-  
-  int ret = listen_on_fd(server, fd);
-  return ret;
-error:
-  if(fd > 0) close(fd);
-  return -1;
-}
-
-/* access mask = 0700 */
-int
-oi_server_listen_unix (oi_server *server, const char *socketfile, int access_mask)
-{
-  int fd = -1;
-  struct linger ling = {0, 0};
-  int flags = 1;
-  int r;
-  struct stat tstat;
-  int old_umask;
-  
-  if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-    perror("socket()");
+    close(fd);
     return -1;
   }
   
-  flags = 1;
-  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *)&flags, sizeof(flags));
-  setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&flags, sizeof(flags));
-  setsockopt(fd, SOL_SOCKET, SO_LINGER, (void *)&ling, sizeof(ling));
-
-  /* the memset call clears nonstandard fields in some impementations that
-   * otherwise mess things up.
-   */
-  memset(&server->address, 0, sizeof(union oi_address));
-  
-  /* FIXME 
-   * current: delete the socket if it exists already 
-   * want: return -1 if file exists or not writable. let the app decide this
-   * one
-   * also: FIXME BLOCKING
-   */ 
-  if (lstat(socketfile, &tstat) == 0) {
-    if (S_ISSOCK(tstat.st_mode))
-      unlink(socketfile);
+  if (listen(fd, server->max_connections) < 0) {
+    perror("listen()");
+    close(fd);
+    return -1;
   }
   
-  server->address.un.sun_family = AF_UNIX;
-  strcpy(server->address.un.sun_path, socketfile);
-
-  old_umask=umask( ~(access_mask&0777)); /* FIXME BLOCKING */
-
-  r = bind( fd
-          , (struct sockaddr *)&server->address
-          , sizeof(server->address.un)
-          );
-
-  umask(old_umask); /* FIXME BLOCKING */
-
-  if (r < 0) {
-    perror("bind()");
-    goto error;
-  }
+  server->fd = fd;
+  server->listening = TRUE;
+  ev_io_set (&server->connection_watcher, server->fd, EV_READ);
   
-  int ret = listen_on_fd(server, fd);
-  return ret;
-error:
-  if(fd > 0) close(fd);
-  return -1;
+  return 0;
 }
-
 
 /**
  * Stops the server. Will not accept new connections.  Does not drop
@@ -710,16 +617,12 @@ oi_server_init(oi_server *server, int max_connections)
   server->connection_watcher.data = server;
   ev_init (&server->connection_watcher, on_connection);
 
-  memset(&server->address, 0, sizeof(union oi_address));
-
   server->on_connection = NULL;
   server->on_error = NULL;
   server->data = NULL;
 }
 
-/* Internal callback 
- * called by socket->timeout_watcher
- */
+/* Internal callback. called by socket->timeout_watcher */
 static void 
 on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
 {
@@ -836,7 +739,7 @@ oi_socket_init(oi_socket *socket, float timeout)
   socket->read_action = NULL;
   socket->write_action = NULL;
 
-  socket->max_chunksize = TCP_MAXWIN; 
+  socket->chunksize = TCP_MAXWIN; 
   socket->on_connect = NULL;
   socket->on_read = NULL;
   socket->on_drain = NULL;
@@ -974,16 +877,14 @@ oi_socket_read_start (oi_socket *socket)
   }
 }
 
-/* for now host is only allowed to be an IP address 
- * ie no dns lookup
- * TODO dns lookup
- */
 int
-oi_socket_open_tcp (oi_socket *s, const char *host, int port)
+oi_socket_connect(oi_socket *s, struct addrinfo *addrinfo)
 {
-  int fd;
-
-  if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+  int fd = socket( addrinfo->ai_family
+                 , addrinfo->ai_socktype
+                 , addrinfo->ai_protocol
+                 );
+  if(fd < 0) {
     perror("socket()");
     return -1;
   }
@@ -991,73 +892,24 @@ oi_socket_open_tcp (oi_socket *s, const char *host, int port)
   int flags = fcntl(fd, F_GETFL, 0);
   int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
   if(r < 0) {
-    /* TODO error report */
-    return r;
-  }
-
-#ifdef SO_NOSIGPIPE
-  flags = 1;
-  setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &flags, sizeof(flags));
-#endif
-  
-  memset(&s->remote_address, 0, sizeof(union oi_address));
-
-  s->remote_address.in.sin_family = AF_INET;
-  s->remote_address.in.sin_port = htons(port);
-  s->remote_address.in.sin_addr.s_addr = inet_addr(host);
-
-  r = connect( fd
-             , (struct sockaddr*)&s->remote_address.in
-             , sizeof s->remote_address.in
-             );
-
-  if(r < 0 && errno != EINPROGRESS) {
-    perror("connect");
-    close(fd);
-    return fd;
-  }
-
-  assign_file_descriptor(s, fd);
-
-  return fd;
-}
-
-int
-oi_socket_open_unix (oi_socket *s, const char *socketfile)
-{
-  int fd;
-
-  if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-    perror("socket()");
+    perror("fcntl()");
     return -1;
   }
-
-  int flags = fcntl(fd, F_GETFL, 0);
-  int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-  if(r < 0) {
-    /* TODO error report */
-    return r;
-  }
-
+      
 #ifdef SO_NOSIGPIPE
   flags = 1;
   setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &flags, sizeof(flags));
 #endif
-  
-  memset(&s->remote_address, 0, sizeof(union oi_address));
-
-  s->remote_address.un.sun_family = AF_UNIX;
-  strcpy(s->remote_address.un.sun_path, socketfile);
 
   r = connect( fd
-             , (struct sockaddr*)&s->remote_address.un
-             , sizeof s->remote_address.un
+             , addrinfo->ai_addr
+             , addrinfo->ai_addrlen
              );
 
   if(r < 0 && errno != EINPROGRESS) {
     perror("connect");
     close(fd);
-    return fd;
+    return -1;
   }
 
   assign_file_descriptor(s, fd);

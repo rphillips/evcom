@@ -31,8 +31,7 @@
 #include <oi.h>
 #include <oi_file.h>
 
-#define HOST "127.0.0.1"
-#define PORT 5555
+#define PORT "5555"
 
 static struct ev_loop *loop;
 static oi_file file_src;
@@ -182,7 +181,18 @@ main(int argc, char *argv[])
 
   oi_server_init(&server, 10);
   server.on_connection = on_server_connection;
-  r = oi_server_listen_tcp(&server, HOST, PORT);
+
+  struct addrinfo *servinfo;
+  struct addrinfo hints;
+  memset(&hints, 0, sizeof hints);
+
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_PASSIVE;
+  r = getaddrinfo(NULL, PORT, &hints, &servinfo);
+  assert(r == 0);
+
+  r = oi_server_listen(&server, servinfo);
   assert(r >= 0 && "problem listening");
   oi_server_attach(&server, loop);
 
@@ -193,7 +203,7 @@ main(int argc, char *argv[])
   client.on_timeout = on_client_timeout;
   client.on_close   = oi_socket_detach;
   client.on_drain   = on_client_drain;
-  r = oi_socket_open_tcp(&client, HOST, PORT);
+  r = oi_socket_connect(&client, servinfo);
   assert(r >= 0 && "problem connecting");
   oi_socket_attach(&client, loop);
 

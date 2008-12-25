@@ -1,6 +1,7 @@
 #include <ev.h>
 #include <pthread.h>
 #include "oi_queue.h"
+#include <netdb.h>
 
 #ifndef oi_async_h
 #define oi_async_h
@@ -72,6 +73,15 @@ struct oi_task {
       void (*cb) (oi_task *, ssize_t result);
       ssize_t result;
     } eio__sendfile;
+
+    struct {
+      const char *nodename; /* restrict ? */
+      const char *servname; /* restrict ? */
+      struct addrinfo hints;
+      struct addrinfo **res; /* restrict ? */
+      void (*cb) (oi_task *, int result);
+      int result;
+    } getaddrinfo;
     
   } params;
 
@@ -102,6 +112,7 @@ enum { OI_TASK_OPEN
      , OI_TASK_CLOSE
      , OI_TASK_SLEEP
      , OI_TASK_SENDFILE
+     , OI_TASK_GETADDRINFO
      };
 
 #define oi_task_init_common(task) do {\
@@ -158,6 +169,19 @@ enum { OI_TASK_OPEN
   (task)->params.eio__sendfile.ifd = _ifd; \
   (task)->params.eio__sendfile.offset = _offset; \
   (task)->params.eio__sendfile.count = _count; \
+} while(0)
+
+#define oi_task_init_getaddrinfo(task, _cb, _nodename, _servname, _ai_family, _ai_socktype, _ai_flags, _res) do { \
+  oi_task_init_common(task); \
+  (task)->type = OI_TASK_GETADDRINFO; \
+  (task)->params.getaddrinfo.cb = _cb; \
+  (task)->params.getaddrinfo.nodename = _nodename; \
+  (task)->params.getaddrinfo.servname = _servname; \
+  memset(&(task)->params.getaddrinfo.hints, 0, sizeof((task)->params.getaddrinfo.hints)); \
+  (task)->params.getaddrinfo.hints.ai_family = _ai_family; \
+  (task)->params.getaddrinfo.hints.ai_socktype = _ai_socktype; \
+  (task)->params.getaddrinfo.hints.ai_flags = _ai_flags; \
+  (task)->params.getaddrinfo.res = _res; \
 } while(0)
 
 #endif /* oi_async_h */

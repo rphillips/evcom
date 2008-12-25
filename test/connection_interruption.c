@@ -39,7 +39,9 @@ on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
   socket->on_timeout = on_peer_timeout;
 
 #ifdef HAVE_GNUTLS
-  if(is_secure) { anon_tls_server(socket); }
+# if SECURE
+  anon_tls_server(socket);
+# endif
 #endif
 
   //printf("on server connection\n");
@@ -85,22 +87,43 @@ main(int argc, const char *argv[])
   int r;
   struct ev_loop *loop = ev_default_loop(0);
 
-  if(argc >= 2 && strcmp(argv[1], "tcp") == 0)
-    is_tcp = 1;
-  if(argc >= 3 && strcmp(argv[2], "secure") == 0)
-    is_secure = 1;
-
   oi_server_init(&server, 1000);
   server.on_connection = on_server_connection;
 #ifdef HAVE_GNUTLS
-  if(is_secure) anon_tls_init();
+# if SECURE
+  anon_tls_init();
+# endif
 #endif
-  if(is_tcp) {
-    r = oi_server_listen_tcp(&server, "127.0.0.1", PORT);
-  } else {
-    r = oi_server_listen_unix(&server, SOCKFILE, 0700);
-  }
-  assert(r >= 0 && "problem listening");
+
+  struct addrinfo *servinfo;
+  struct addrinfo hints;
+  memset(&hints, 0, sizeof hints);
+#if TCP
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+    r = getaddrinfo(NULL, PORT, &hints, &servinfo);
+    assert(r == 0);
+#else
+    struct stat tstat;
+    if (lstat(SOCKFILE, &tstat) == 0) {
+      if (S_ISSOCK(tstat.st_mode))
+        unlink(SOCKFILE);
+    }
+
+    servinfo = malloc(sizeof(struct addrinfo));
+    servinfo->ai_family = AF_UNIX;
+    servinfo->ai_socktype = SOCK_STREAM;
+
+    struct sockaddr_un *sockaddr = calloc(sizeof(struct sockaddr_un), 1);
+    sockaddr->sun_family = AF_UNIX;
+    strcpy(sockaddr->sun_path, SOCKFILE);
+
+    servinfo->ai_addr = (struct sockaddr*)sockaddr;
+    servinfo->ai_addrlen = sizeof(struct sockaddr_un);
+#endif
+
+  oi_server_listen(&server, servinfo);
   oi_server_attach(&server, loop);
 
   int i;
@@ -113,14 +136,11 @@ main(int argc, const char *argv[])
     client->on_close   = on_client_close;
     client->on_timeout = on_client_timeout;
 #ifdef HAVE_GNUTLS
-    if(is_secure) { anon_tls_client(client); }
+# if SECURE
+    anon_tls_client(client);
+# endif
 #endif
-    if(is_tcp) {
-      r = oi_socket_open_tcp(client, "127.0.0.1", PORT);
-      //printf("connecting client to port 5000\n");
-    } else {
-      r = oi_socket_open_unix(client, SOCKFILE);
-    }
+    r = oi_socket_connect(client, servinfo);
     assert(r > 0 && "problem connecting");
     oi_socket_attach(client, loop);
   }

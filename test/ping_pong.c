@@ -21,6 +21,13 @@ on_peer_read(oi_socket *socket, const void *base, size_t len)
 }
 
 static void 
+on_peer_error(oi_socket *socket, int domain, int code)
+{
+  fprintf(stderr, "error on the peer socket: %s\n", oi_strerror(domain, code));
+  exit(1);
+}
+
+static void 
 on_client_close(oi_socket *socket)
 {
   //printf("client connection closed\n");
@@ -40,7 +47,9 @@ on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
   nconnections++;
 
 #ifdef HAVE_GNUTLS
-  if(is_secure) { anon_tls_server(socket); }
+# if SECURE
+  anon_tls_server(socket);
+# endif
 #endif
 
   //printf("on server connection\n");
@@ -86,27 +95,44 @@ main(int argc, const char *argv[])
   //printf("sizeof(oi_server): %d\n", sizeof(oi_server));
   //printf("sizeof(oi_socket): %d\n", sizeof(oi_socket));
 
-  if(argc >= 2 && strcmp(argv[1], "unix") == 0)
-    is_tcp = 0;
-
-  if(argc >= 3 && strcmp(argv[2], "secure") == 0)
-    is_secure = 1;
-
   oi_server_init(&server, 10);
   server.on_connection = on_server_connection;
 
 #ifdef HAVE_GNUTLS
-  if(is_secure) { anon_tls_init(); }
+# if SECURE
+  anon_tls_init();
+# endif
 #endif /* HAVE_GNUTLS */
 
-  if(is_tcp) {
-    r = oi_server_listen_tcp(&server, HOST, PORT);
-    //printf("starting server on port 5000\n");
-  } else {
-    r = oi_server_listen_unix(&server, SOCKFILE, 0700);
-  }
-  assert(r >= 0 && "problem listening");
+  struct addrinfo *servinfo;
+  struct addrinfo hints;
+  memset(&hints, 0, sizeof hints);
+#if TCP
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+    r = getaddrinfo(NULL, PORT, &hints, &servinfo);
+    assert(r == 0);
+#else
+    struct stat tstat;
+    if (lstat(SOCKFILE, &tstat) == 0) {
+      if (S_ISSOCK(tstat.st_mode))
+        unlink(SOCKFILE);
+    }
 
+    servinfo = malloc(sizeof(struct addrinfo));
+    servinfo->ai_family = AF_UNIX;
+    servinfo->ai_socktype = SOCK_STREAM;
+
+    struct sockaddr_un *sockaddr = calloc(sizeof(struct sockaddr_un), 1);
+    sockaddr->sun_family = AF_UNIX;
+    strcpy(sockaddr->sun_path, SOCKFILE);
+
+    servinfo->ai_addr = (struct sockaddr*)sockaddr;
+    servinfo->ai_addrlen = sizeof(struct sockaddr_un);
+#endif
+  r = oi_server_listen(&server, servinfo);
+  assert(r == 0);
   oi_server_attach(&server, loop);
 
   oi_socket_init(&client, 5.0);
@@ -117,16 +143,12 @@ main(int argc, const char *argv[])
   client.on_timeout = on_client_timeout;
 
 #ifdef HAVE_GNUTLS
-  if(is_secure) { anon_tls_client(&client); }
+# if SECURE
+  anon_tls_client(&client);
+# endif
 #endif /* HAVE_GNUTLS */
 
-  if(is_tcp) {
-    r = oi_socket_open_tcp(&client, HOST, PORT);
-    //printf("connecting client to port 5000\n");
-  } else {
-    r = oi_socket_open_unix(&client, SOCKFILE);
-  }
-
+  r = oi_socket_connect(&client, servinfo);
   assert(r > 0 && "problem connecting");
   oi_socket_attach(&client, loop);
 
@@ -135,6 +157,7 @@ main(int argc, const char *argv[])
   assert(successful_ping_count == EXCHANGES + 1);
   assert(nconnections == 1);
 
+  freeaddrinfo(servinfo);
 
   return 0;
 }
