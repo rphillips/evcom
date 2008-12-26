@@ -6,10 +6,7 @@
 #include <errno.h> /* for the default methods */
 #include <string.h> /* memset */
 
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <netinet/tcp.h> /* TCP_NODELAY */
-#include <arpa/inet.h>
 
 #include <ev.h>
 #include <oi_queue.h>

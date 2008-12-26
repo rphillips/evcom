@@ -4,6 +4,12 @@
 #include <unistd.h>
 #include <assert.h>
 
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <netinet/in.h>
+
+
 #include <ev.h>
 #include <oi.h>
 #include <gnutls/gnutls.h>
