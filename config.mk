@@ -30,9 +30,7 @@ LDFLAGS = -s
 ALL_CFLAGS = $(CFLAGS)
 ALL_LDFLAGS = $(LDFLAGS)
 
-prefix = $(HOME)
-# DESTDIR=
-export prefix 
+PREFIX = $(HOME)/local/liboi
 
 CC = gcc
 AR = ar
