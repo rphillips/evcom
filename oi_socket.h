@@ -1,8 +1,7 @@
 #include <netdb.h>
 #include <ev.h>
 #include <gnutls/gnutls.h>
-
-#include <oi_queue.h>
+#include <oi.h>
 
 #ifndef oi_socket_h
 #define oi_socket_h
@@ -16,7 +15,6 @@
 #define OI_ERROR_NEEDS_WRITE_BUT_CANNOT 1
 #define OI_ERROR_UNKNOWN_LIBEV_ERROR 2
 
-typedef struct oi_buf     oi_buf;
 typedef struct oi_server  oi_server;
 typedef struct oi_socket  oi_socket;
 
@@ -88,18 +86,6 @@ struct oi_socket {
   void (*on_close)     (oi_socket *);
   void (*on_timeout)   (oi_socket *);
   void *data;
-};
-
-struct oi_buf {
-  /* public */
-  char *base;
-  size_t len;
-  void (*release) (oi_buf *); /* called when oi_socket is done with the object */
-  void *data;
-
-  /* private */
-  size_t written;
-  oi_queue_t queue;
 };
 
 #endif /* oi_socket_h */

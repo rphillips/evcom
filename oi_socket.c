@@ -9,8 +9,7 @@
 #include <netinet/tcp.h> /* TCP_NODELAY */
 
 #include <ev.h>
-#include <oi_queue.h>
-#include <oi_socket.h>
+#include <oi.h>
 
 /* for now we will always include GNUTLS 
  * XXX make gnutls optional in the future? 

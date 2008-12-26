@@ -63,7 +63,7 @@ ifndef V
 endif
 endif
 
-DEP = oi_socket.h oi_async.h oi_file.h oi_queue.h
+DEP = oi_socket.h oi_async.h oi_file.h
 SRC = oi_socket.c oi_async.c oi_file.c
 OBJ = ${SRC:.c=.o}
 

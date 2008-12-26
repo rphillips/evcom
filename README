@@ -13,6 +13,8 @@ transport layer security (or SSL) is handled in cooperation with GnuTLS.
  * Supports both server and client sockets.
  * Supports evented file I/O emulation through a thread pool.
  * SSL support.
+ * Sendfile (file to socket) with emulation on platforms that do not support
+   it.
 
 = Usage
 

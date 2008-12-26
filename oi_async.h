@@ -1,7 +1,7 @@
 #include <ev.h>
 #include <pthread.h>
-#include <oi_queue.h>
 #include <netdb.h>
+#include <oi.h>
 
 #ifndef oi_async_h
 #define oi_async_h

@@ -1,6 +1,4 @@
-#include <oi_socket.h>
-#include <oi_async.h>
-#include <oi_queue.h>
+#include <oi.h>
 #include <ev.h>
 
 #ifndef oi_file_h
