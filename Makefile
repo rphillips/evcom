@@ -153,12 +153,12 @@ install: $(OUTPUT_LIB) $(OUTPUT_A)
 	install -m755 ${OUTPUT_LIB} ${PREFIX}/lib
 	ln -sfn $(PREFIX)/lib/$(OUTPUT_LIB) $(PREFIX)/lib/$(NAME).so
 	@echo INSTALLING headers to ${PREFIX}/include
-	install -m644 oi.h ${PREFIX}/include 
+	install -m644 oi_*.h ${PREFIX}/include 
 
 uninstall:
 	@echo REMOVING so from ${PREFIX}/lib
 	rm -f ${PREFIX}/lib/${NAME}.*
 	@echo REMOVING headers from ${PREFIX}/include
-	rm -f ${PREFIX}/include/oi.h
+	rm -f ${PREFIX}/include/oi_*.h
 
 .PHONY: all options clean clobber install uninstall test 
