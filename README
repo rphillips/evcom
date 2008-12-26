@@ -7,7 +7,7 @@ transport layer security (or SSL) is handled in cooperation with GnuTLS.
 = Feature Summary
  
  * The library has a minimalist design
-   - Does not internally make any internal allocations 
+   - Does not make any internal allocations 
    - Does not wrap functionality of GnuTLS or libev. The user must
      use those libraries in cooperation with liboi. 
  * Supports both server and client sockets.
