@@ -1,0 +1,3 @@
+liboi is a C library for doing evented I/O. 
+It supports both sockets and files. 
+Documentation soon.
