@@ -18,7 +18,7 @@ transport layer security (or SSL) is handled in cooperation with GnuTLS.
 
 The library is new and under development. Please look at the header files for
 current information-it should be mostly self-explanatory. 
-The test directory has several example problems. 
+The test directory has several example programs. 
 
 = Website 
 
