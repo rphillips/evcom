@@ -1,6 +1,6 @@
 #include <ev.h>
 #include <pthread.h>
-#include "oi_queue.h"
+#include <oi_queue.h>
 #include <netdb.h>
 
 #ifndef oi_async_h

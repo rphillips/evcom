@@ -12,10 +12,16 @@
 #include <arpa/inet.h>
 
 #include <ev.h>
-#include "oi_queue.h"
-#include "oi_socket.h"
- 
-#ifdef HAVE_GNUTLS
+#include <oi_queue.h>
+#include <oi_socket.h>
+
+/* for now we will always include GNUTLS 
+ * XXX make gnutls optional in the future? 
+ */
+#undef HAVE_GNUTLS
+#define HAVE_GNUTLS 1
+
+#if HAVE_GNUTLS
 # include <gnutls/gnutls.h>
 # define GNUTLS_NEED_WRITE (gnutls_record_get_direction(socket->session) == 1)
 # define GNUTLS_NEED_READ (gnutls_record_get_direction(socket->session) == 0)
@@ -110,7 +116,7 @@ update_write_buffer_after_send(oi_socket *socket, ssize_t sent)
 }
 
 
-#ifdef HAVE_GNUTLS
+#if HAVE_GNUTLS
 static int secure_socket_send(oi_socket *socket);
 static int secure_socket_recv(oi_socket *socket);
 
@@ -458,7 +464,7 @@ assign_file_descriptor(oi_socket *socket, int fd)
   socket->read_action = socket_recv;
   socket->write_action = socket_send;
 
-#ifdef HAVE_GNUTLS
+#if HAVE_GNUTLS
   if(socket->secure) {
     gnutls_transport_set_lowat(socket->session, 0); 
     gnutls_transport_set_push_function(socket->session, nosigpipe_push);
@@ -728,7 +734,7 @@ oi_socket_init(oi_socket *socket, float timeout)
 
   socket->secure = FALSE;
   socket->wait_for_secure_hangup = FALSE;
-#ifdef HAVE_GNUTLS
+#if HAVE_GNUTLS
   socket->session = NULL;
 #endif 
 

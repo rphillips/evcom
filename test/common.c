@@ -5,10 +5,8 @@
 #include <assert.h>
 
 #include <ev.h>
-#include "oi.h"
-#ifdef HAVE_GNUTLS
-# include <gnutls/gnutls.h>
-#endif
+#include <oi.h>
+#include <gnutls/gnutls.h>
 
 #define HOST "127.0.0.1"
 #define SOCKFILE "/tmp/oi.sock"
@@ -20,10 +18,8 @@ static void
 on_peer_close(oi_socket *socket)
 {
   //printf("server connection closed\n");
-#ifdef HAVE_GNUTLS
-# if SECURE
+#if SECURE
   gnutls_deinit(socket->session);
-# endif
 #endif
   free(socket);
 }
@@ -50,7 +46,6 @@ on_client_error(oi_socket *socket, int domain, int code)
 }
 
 
-#ifdef HAVE_GNUTLS
 #define DH_BITS 768
 gnutls_anon_server_credentials_t server_credentials;
 const int kx_prio[] = { GNUTLS_KX_ANON_DH, 0 };
@@ -102,4 +97,3 @@ void anon_tls_client(oi_socket *socket)
   assert(socket->secure);
 }
 
-#endif

@@ -4,13 +4,7 @@
  * from nginx ngx_queue.h
  */
 
-
-/*
-#include <ngx_config.h>
-#include <ngx_core.h>
-*/
 #include <stddef.h> /* offsetof() */
-
 
 #ifndef _OI_QUEUE_H_INCLUDED_
 #define _OI_QUEUE_H_INCLUDED_

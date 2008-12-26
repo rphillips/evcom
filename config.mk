@@ -1,38 +1,40 @@
-PREFIX = $(HOME)/local/oi
+# Define V=1 to have a more verbose compile.
+#
+#
+# Define EVDIR=/foo/bar if your libev header and library files are in
+# /foo/bar/include and /foo/bar/lib directories.
+EVDIR=$(HOME)/local/libev
 
-# libev (Must be compiled with EV_MULTIPLICITY=1 - the default)
-EVINC  = $(HOME)/local/libev/include
-EVLIB  = $(HOME)/local/libev/lib
-EVLIBS = -L${EVLIB} -lev
+# Define GNUTLSDIR=/foo/bar if your gnutls header and library files are in
+# /foo/bar/include and /foo/bar/lib directories.
+#
+#
+# Define NO_PREAD if you have a problem with pread() system call (e.g.
+# cygwin.dll before v1.5.22).
+#
+#
+# Define NO_SENDFILE if you have a problem with the sendfile() system call
+#
+#
 
-# GnuTLS, comment out if you don't want it
-GNUTLSLIB   = /usr/lib
-GNUTLSINC   = /usr/include
-GNUTLSLIBS  = -L${GNUTLSLIB} -lgnutls
-GNUTLSFLAGS = -DHAVE_GNUTLS
+uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
+uname_M := $(shell sh -c 'uname -m 2>/dev/null || echo not')
+uname_O := $(shell sh -c 'uname -o 2>/dev/null || echo not')
+uname_R := $(shell sh -c 'uname -r 2>/dev/null || echo not')
+uname_P := $(shell sh -c 'uname -p 2>/dev/null || echo not')
 
-# includes and libs
-INCS = -I${EVINC} -I${GNUTLSINC}
-LIBS =   ${EVLIBS}  ${GNUTLSLIBS} -pthread #-lefence
+# CFLAGS and LDFLAGS are for the users to override from the command line.
 
-# flags
-CPPFLAGS = -DVERSION=\"$(VERSION)\" ${GNUTLSFLAGS} -D__linux=1 -DHAVE_SENDFILE=1
-CFLAGS   = -g -Wall ${INCS} ${CPPFLAGS} -fPIC # -O2 
-LDFLAGS  = -s ${LIBS}
-LDOPT    = -shared
-SUFFIX   = so
-SONAME   = -Wl,-soname,$(OUTPUT_LIB)
+CFLAGS = -g -O2 
+LDFLAGS = -s
+ALL_CFLAGS = $(CFLAGS)
+ALL_LDFLAGS = $(LDFLAGS)
 
-# Solaris
-#CFLAGS  = -fast ${INCS} -DVERSION=\"$(VERSION)\" -fPIC
-#LDFLAGS = ${LIBS}
-#SONAME  = 
+prefix = $(HOME)
+# DESTDIR=
+export prefix 
 
-# Darwin
-#LDOPT  = -dynamiclib 
-#SUFFIX = dylib
-#SONAME = -current_version $(VERSION) -compatibility_version $(VERSION)
-
-# compiler and linker
-CC = cc
+CC = gcc
+AR = ar
+RM = rm -f
 RANLIB = ranlib

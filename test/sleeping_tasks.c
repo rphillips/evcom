@@ -2,7 +2,7 @@
 #include <stdlib.h> /* malloc(), free() */
 #include <assert.h>
 #include <ev.h>
-#include "oi_async.h"
+#include <oi_async.h>
 
 #define SLEEPS 4
 static int runs = 0;

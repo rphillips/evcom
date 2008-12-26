@@ -5,11 +5,9 @@
 #include <netdb.h>
 
 #include <ev.h>
-#ifdef HAVE_GNUTLS
-# include <gnutls/gnutls.h>
-#endif
+#include <gnutls/gnutls.h>
 
-#include "oi_queue.h"
+#include <oi_queue.h>
 
 #ifndef oi_socket_h
 #define oi_socket_h
@@ -47,9 +45,7 @@ void oi_socket_write              (oi_socket *, oi_buf *);
 void oi_socket_write_simple       (oi_socket *, const char *str, size_t len);
 void oi_socket_write_eof          (oi_socket *);
 void oi_socket_close              (oi_socket *);
-#ifdef HAVE_GNUTLS
 void oi_socket_set_secure_session (oi_socket *, gnutls_session_t);
-#endif 
 
 struct oi_server {
   /* read only */
@@ -86,9 +82,7 @@ struct oi_socket {
   ev_io write_watcher;
   ev_io read_watcher;
   ev_timer timeout_watcher;
-#ifdef HAVE_GNUTLS
   gnutls_session_t session;
-#endif
   
   /* public */
   size_t chunksize; /* the maximum chunk that on_read() will return */

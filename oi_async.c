@@ -24,8 +24,8 @@
 #endif
 
 #include <ev.h>
-#include "oi_async.h"
-#include "oi_queue.h"
+#include <oi_async.h>
+#include <oi_queue.h>
 
 #define NWORKERS 4 
 /* TODO make adjustable 
