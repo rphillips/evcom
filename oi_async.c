@@ -191,6 +191,8 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count)
       res    += cnt;
       count  -= cnt;
     }
+
+    free(eio_buf);
   }
 
   return res;
