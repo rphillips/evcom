@@ -307,6 +307,7 @@ worker_loop(void *data)
   FD_SET(readiness_pipe[0], &readfds);
 
   active_workers++;
+  assert(active_workers <= NWORKERS);
 
   while(1) {
     select(1+readiness_pipe[0], &readfds, 0, 0, 0);
@@ -343,21 +344,29 @@ error:
 static void
 start_workers()
 {
-  assert(active_watchers == 0);
+  assert(readiness_pipe[0] == -1);
+  assert(readiness_pipe[1] == -1);
+  assert(active_workers == 0);
+
   int r = pipe(readiness_pipe);
   if(r < 0) {
     perror("pipe()");
     assert(0 && "TODO HANDLE ME"); 
   }
 
-  /* TODO set non-blocking*/
-
-  int i;
-  for(i = 0; i < NWORKERS; i++) {
-    worker_new();
+  /* set the write end non-blocking */
+  int flags = fcntl(readiness_pipe[1], F_GETFL, 0);
+  r = fcntl(readiness_pipe[1], F_SETFL, flags | O_NONBLOCK);
+  if(r < 0) {
+    assert(0 && "error setting pipe to non-blocking?");
+    /* TODO error report */
   }
 
   oi_queue_init(&waiting_tasks);
+
+  int i;
+  for(i = 0; i < NWORKERS; i++)
+    worker_new();
 }
 
 /*
@@ -432,9 +441,8 @@ dispatch_tasks(oi_async *async)
 void
 oi_async_attach (struct ev_loop *loop, oi_async *async)
 {
-  if(active_watchers == 0) {
+  if(active_watchers == 0 && active_workers == 0)
     start_workers();
-  }
   active_watchers++;
 
   ev_async_start(loop, &async->watcher);

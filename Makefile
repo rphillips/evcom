@@ -92,7 +92,6 @@ ${OBJ}: ${DEP}
 
 FAIL=echo "\033[1;31mFAIL\033[m"
 PASS=echo "\033[1;32mPASS\033[m"
-TEST= && $(PASS) || $(FAIL)
 
 /tmp/oi_fancy_copy_src:
 	@perl -e "print('C'x(1024*40))" > /tmp/oi_fancy_copy_src
