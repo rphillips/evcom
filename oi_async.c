@@ -249,20 +249,13 @@ execute_task(oi_task *t)
 {
   errno = 0;
   switch(t->type) {
-    case OI_TASK_OPEN:  P3(open, pathname, flags, mode);
-    case OI_TASK_READ:  P3(read, fd, buf, count);
-    case OI_TASK_WRITE: P3(write, fd, buf, count);
-    case OI_TASK_CLOSE: P1(close, fd);
-    case OI_TASK_SLEEP: P1(sleep, seconds);
-    case OI_TASK_SENDFILE: P4(eio__sendfile, ofd, ifd, offset, count);
-    case OI_TASK_GETADDRINFO:
-      t->params.getaddrinfo.result = 
-        getaddrinfo (  t->params.getaddrinfo.nodename
-                    ,  t->params.getaddrinfo.servname
-                    , &t->params.getaddrinfo.hints
-                    ,  t->params.getaddrinfo.res
-                    );
-      break;
+    case OI_TASK_OPEN:        P3(open, pathname, flags, mode);
+    case OI_TASK_READ:        P3(read, fd, buf, count);
+    case OI_TASK_WRITE:       P3(write, fd, buf, count);
+    case OI_TASK_CLOSE:       P1(close, fd);
+    case OI_TASK_SLEEP:       P1(sleep, seconds);
+    case OI_TASK_SENDFILE:    P4(eio__sendfile, ofd, ifd, offset, count);
+    case OI_TASK_GETADDRINFO: P4(getaddrinfo, nodename, servname, hints, res);
     default: 
       assert(0 && "unknown task type");
       break;

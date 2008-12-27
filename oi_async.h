@@ -76,7 +76,7 @@ struct oi_task {
     struct {
       const char *nodename; /* restrict ? */
       const char *servname; /* restrict ? */
-      struct addrinfo hints;
+      struct addrinfo *hints;
       struct addrinfo **res; /* restrict ? */
       void (*cb) (oi_task *, int result);
       int result;
@@ -175,10 +175,7 @@ enum { OI_TASK_OPEN
   (task)->params.getaddrinfo.cb = _cb; \
   (task)->params.getaddrinfo.nodename = _nodename; \
   (task)->params.getaddrinfo.servname = _servname; \
-  memset(&(task)->params.getaddrinfo.hints, 0, sizeof((task)->params.getaddrinfo.hints)); \
-  (task)->params.getaddrinfo.hints.ai_family = _ai_family; \
-  (task)->params.getaddrinfo.hints.ai_socktype = _ai_socktype; \
-  (task)->params.getaddrinfo.hints.ai_flags = _ai_flags; \
+  (task)->params.getaddrinfo.hints = _hints; \
   (task)->params.getaddrinfo.res = _res; \
 } while(0)
 
