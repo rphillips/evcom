@@ -14,7 +14,6 @@ struct oi_async {
   ev_async watcher;  
   struct ev_loop *loop;
 
-  pthread_mutex_t lock; /* for finished_tasks */
   oi_queue_t finished_tasks;
   oi_queue_t new_tasks;
 

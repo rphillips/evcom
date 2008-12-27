@@ -36,6 +36,7 @@ static int active_workers = 0;
 static int readiness_pipe[2] = {-1, -1};
 static oi_queue_t waiting_tasks;
 static pthread_mutex_t queue_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t finished_lock = PTHREAD_MUTEX_INITIALIZER;
 
 struct worker {
   oi_task *task;
@@ -45,6 +46,9 @@ struct worker {
 
 /* Sendfile and pread emulation come from Marc Lehmann's libeio and are
  * Copyright (C)2007,2008 Marc Alexander Lehmann.
+ * Many ideas of oi_async.* are taken from libeio and in fact, I plan to
+ * use libeio once it becomes usable for me. (The problem is issuing tasks
+ * from multiple threads.)
  */
 
 #if !HAVE_PREADWRITE
@@ -289,9 +293,9 @@ attempt_to_get_a_task(struct worker *worker)
   // 3 notify complition
   oi_async *async = task->async;
   assert(async != NULL);
-  pthread_mutex_lock(&async->lock);
+  pthread_mutex_lock(&finished_lock);
     oi_queue_insert_head(&async->finished_tasks, &task->queue);
-  pthread_mutex_unlock(&async->lock);
+  pthread_mutex_unlock(&finished_lock);
   ev_async_send(async->loop, &async->watcher);
   worker->task = NULL;
 
@@ -375,7 +379,7 @@ on_completion(struct ev_loop *loop, ev_async *watcher, int revents)
   oi_async *async = watcher->data;
   oi_task *task;
 
-  while((task = queue_shift(&async->lock, &async->finished_tasks))) {
+  while((task = queue_shift(&finished_lock, &async->finished_tasks))) {
     assert(task->active);
     task->active = 0;
     errno = task->errorno;
@@ -433,10 +437,6 @@ dispatch_tasks(oi_async *async)
 void
 oi_async_attach (struct ev_loop *loop, oi_async *async)
 {
-  /* FIXME */
-  pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-  async->lock = lock;
-
   if(active_watchers == 0) {
     start_workers();
   }
@@ -451,7 +451,6 @@ oi_async_attach (struct ev_loop *loop, oi_async *async)
 void
 oi_async_detach (oi_async *async)
 {
-  pthread_mutex_destroy(&async->lock);
   if(async->loop == NULL)
     return;
   ev_async_stop(async->loop, &async->watcher);
