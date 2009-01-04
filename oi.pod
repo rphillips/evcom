@@ -199,6 +199,61 @@ Stops the server from listening.
 =head1 Files
 
 Files internally use a thread pool to operate without blocking.
+The thread pool is started once a file is attached and it continues until
+program termination. 
+
+The following callbacks are used inside of the file object
+    void (*on_open)  (oi_file *);
+    void (*on_read)  (oi_file *, size_t count);
+    void (*on_drain) (oi_file *);
+    void (*on_error) (oi_file *, struct oi_error);
+    void (*on_close) (oi_file *);
+
+=over 4
+
+=item int oi_file_init (oi_file *);
+
+Initializes a file object.
+
+=item void oi_file_attach (oi_file *, struct ev_loop *);
+
+Attaches a file object to a loop. If the thread pool has not been started,
+then it is started at this call. 
+
+=item void oi_file_detach (oi_file *);
+
+Detaches a file object from the loop.
+
+=item int  oi_file_open_path (oi_file *, const char *path, int flags, mode_t mode);
+
+Opens a file specified by the path. The C<flag> and C<mode> arguments are
+the same as used by L<open.2>. The C<file.on_open> callback is triggered
+when the file is opened. Returns 0 on success. Returns -1 if the given file
+is already open.
+
+WARNING: path argument must be valid until C<oi_file> object is closed and
+the C<file.on_close()> callback is made. I.E., liboi does not strdup the path
+pointer. 
+
+=item int oi_file_open_stdin (oi_file *);
+
+=item int oi_file_open_stdout (oi_file *);
+
+=item int oi_file_open_stderr (oi_file *);
+
+=item void oi_file_read_start (oi_file *, void *buffer, size_t bufsize);
+
+
+
+=item void oi_file_read_stop (oi_file *);
+
+=item int oi_file_write (oi_file *, oi_buf *to_write);
+
+=item int oi_file_write_simple (oi_file *, const char *, size_t);
+
+=item int oi_file_send (oi_file *source, oi_socket *destination, off_t offset, size_t length);
+
+=item void oi_file_close (oi_file *);
 
 =over 4
 

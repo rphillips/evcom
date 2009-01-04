@@ -1,26 +1,32 @@
 include config.mk
 
 CFLAGS  += -fPIC -I.
-LDFLAGS += -pthread
 LDOPT    = -shared
 SUFFIX   = so
 SONAME   = -Wl,-soname,$(OUTPUT_LIB)
 
 ifeq ($(uname_S),Linux)
 	CFLAGS += -D__linux=1
+	LDFLAGS += -pthread
 endif
 ifeq ($(uname_S),FreeBSD)
 	CFLAGS += -D__freebsd=1
+	LDFLAGS += -pthread
 endif
 ifeq ($(uname_S),SunOS)
 	CFLAGS += -D__solaris=1
+	LDFLAGS += -pthread
 endif
 ifeq ($(uname_S),HP-UX)
 	CFLAGS += -D__hpux=1
+	LDFLAGS += -pthread
 endif
 ifeq ($(uname_S),Darwin)
 	CFLAGS += -D__darwin=1
-	SUFFIX = dylib
+	LDOPT   = -dynamiclib
+	SONAME  = -current_version $(VERSION) -compatibility_version $(VERSION)
+	SUFFIX  = dylib
+	NO_SENDFILE = 1
 endif
 
 ifdef EVDIR

@@ -322,11 +322,15 @@ worker_new()
   pthread_attr_setdetachstate(&worker->thread_attr, PTHREAD_CREATE_DETACHED);
 
   r = pthread_create( &worker->thread
-                    , &worker->thread_attr
+                    , NULL // &worker->thread_attr
                     , worker_loop
                     , worker
                     ); 
-  if(r < 0) goto error; /* TODO: Check return value */
+  if(r != 0) {
+    /* TODO: error checking */
+    perror("pthread_create");
+    goto error; 
+  }
 
   return worker;
 error:
