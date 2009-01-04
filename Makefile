@@ -124,11 +124,12 @@ test/fancy_copy: test/fancy_copy.c $(OUTPUT_A)
 
 doc: oi.3
 oi.3: oi.pod
-	pod2man -c "liboi - evented I/O" oi.pod > oi.3
+	pod2man -s 3 -c "liboi - evented I/O" oi.pod > oi.3
 
 clean:
 	rm -f ${OBJ} $(OUTPUT_A) $(OUTPUT_LIB) $(NAME)-${VERSION}.tar.gz 
 	rm -f test/test_* test/fancy_copy
+	rm -f oi.3
 
 install: $(OUTPUT_LIB) $(OUTPUT_A)
 	@echo INSTALLING ${OUTPUT_A} and ${OUTPUT_LIB} to ${PREFIX}/lib

@@ -30,6 +30,10 @@ is completed with the C<*_attach> and C<*_detach>  methods. When an object
 is detached, other methods can be called - just the loop will not churn out
 callbacks.
 
+Both C<oi_socket> and C<oi_file> contain a number of callback pointers.
+These are to be set manually after calling their initalization functions.
+All classes include a C<void *data> member which is left for you to use.
+
 =head1 ERROR HANDLING
 
 
@@ -154,10 +158,51 @@ assign its credentials.
 
 =back
 
-=head1 Socket Server
+=head1 Servers
+
+A server simply listens on an address for new connections. The connections
+come in the form of C<oi_socket> objects. The key is to give a
+C<server.on_connection()> callback which returns an initialized C<oi_socket>.
+The callback looks like this 
+
+    oi_socket* (*on_connection) (oi_server *, struct sockaddr *remote_addr, socklen_t remove_addr_len);
+
+Returning NULL from C<on_connection()> will reject the connection.
+
+=over 4
+
+=item void oi_server_init (oi_server *, int max_connections);
+
+Initializes a server object. C<max_connections> is the argument given
+internally to C<listen()>. Set the C<server.on_connection()> callback
+after calling this.
+
+=item int oi_server_listen (oi_server *, struct addrinfo *addrinfo);
+
+Listens on the specified address. The server will not accept connections
+until it is attached to a loop, however.
+
+=item void oi_server_attach (oi_server *, struct ev_loop *loop);
+
+Attaches a server to a loop. 
+
+=item void oi_server_detach (oi_server *);
+
+Detaches a server to a loop. Does not close the server.
+
+=item void oi_server_close (oi_server *); 
+
+Stops the server from listening. 
+
+=back
 
 =head1 Files
 
+Files internally use a thread pool to operate without blocking.
+
+=over 4
+
+=back
 
 =head1 AUTHOR
 
