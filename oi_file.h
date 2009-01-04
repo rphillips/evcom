@@ -44,7 +44,7 @@ struct oi_file {
   void (*on_open)      (oi_file *);
   void (*on_read)      (oi_file *, size_t count);
   void (*on_drain)     (oi_file *);
-  void (*on_error)     (oi_file *, int domain, int code);
+  void (*on_error)     (oi_file *, struct oi_error);
   void (*on_close)     (oi_file *);
   void *data;
 };

@@ -45,9 +45,8 @@ on_peer_timeout(oi_socket *socket)
 }
 
 static void 
-on_client_error(oi_socket *socket, int domain, int code)
+on_client_error(oi_socket *socket, struct oi_error e)
 {
-  fprintf(stderr, "error on the client socket: %s\n", oi_strerror(domain, code));
   exit(1);
 }
 

@@ -6,19 +6,8 @@
 #ifndef oi_socket_h
 #define oi_socket_h
 
-/* Error Domains */
-#define OI_ERROR_DOMAIN_OI     0
-#define OI_ERROR_DOMAIN_GNUTLS 1
-#define OI_ERROR_DOMAIN_SYSTEM 2
-/* Error Codes */
-#define OI_ERROR_NEEDS_READ_BUT_ALREADY_GOT_EOF 0
-#define OI_ERROR_NEEDS_WRITE_BUT_CANNOT 1
-#define OI_ERROR_UNKNOWN_LIBEV_ERROR 2
-
 typedef struct oi_server  oi_server;
 typedef struct oi_socket  oi_socket;
-
-const char *oi_strerror(int domain, int code);
 
 void oi_server_init               (oi_server *, int max_connections);
  int oi_server_listen             (oi_server *, struct addrinfo *addrinfo);
@@ -52,7 +41,7 @@ struct oi_server {
 
   /* public */
   oi_socket* (*on_connection) (oi_server *, struct sockaddr *remote_addr, socklen_t remove_addr_len);
-  void       (*on_error)      (oi_server *, int domain, int code);
+  void       (*on_error)      (oi_server *, struct oi_error e);
   void *data;
 };
 
@@ -82,7 +71,7 @@ struct oi_socket {
   void (*on_connect)   (oi_socket *);
   void (*on_read)      (oi_socket *, const void *buf, size_t count);
   void (*on_drain)     (oi_socket *);
-  void (*on_error)     (oi_socket *, int domain, int code);
+  void (*on_error)     (oi_socket *, struct oi_error e);
   void (*on_close)     (oi_socket *);
   void (*on_timeout)   (oi_socket *);
   void *data;

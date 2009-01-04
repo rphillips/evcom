@@ -34,24 +34,14 @@
 #define OI_AGAIN 1
 #define OI_ERROR 2 
 
-#define RAISE_OI_ERROR(s, code)     { if(s->on_error) { s->on_error(s, OI_ERROR_DOMAIN_OI    , code); } }
-#define RAISE_SYSTEM_ERROR(s)       { if(s->on_error) { s->on_error(s, OI_ERROR_DOMAIN_SYSTEM, errno); } }
-#define RAISE_GNUTLS_ERROR(s, code) { if(s->on_error) { s->on_error(s, OI_ERROR_DOMAIN_GNUTLS, code); } }
-
-const char*
-oi_strerror(int domain, int code)
-{
-  switch(domain) {
-    case OI_ERROR_DOMAIN_OI:
-      assert(0 && "no error codes in OI domain yet");
-    case OI_ERROR_DOMAIN_SYSTEM:
-      return (const char*)strerror(code);
-    case OI_ERROR_DOMAIN_GNUTLS:
-      return gnutls_strerror(code);
-    default:
-      assert(0 && "(unknown error domain)");
-  }
-}
+#define RAISE_ERROR(s, _domain, _code) do { \
+  if(s->on_error) { \
+    struct oi_error __oi_error; \
+    __oi_error.domain = _domain; \
+    __oi_error.code = _code; \
+    s->on_error(s, __oi_error); \
+  } \
+} while(0) \
 
 static int 
 full_close(oi_socket *socket)
@@ -74,7 +64,7 @@ half_close(oi_socket *socket)
   int r = shutdown(socket->fd, SHUT_WR);
 
   if(r == -1) {
-    RAISE_SYSTEM_ERROR(socket);
+    RAISE_ERROR(socket, OI_ERROR_SHUTDOWN, errno);
     return OI_ERROR;
   }
 
@@ -143,7 +133,7 @@ secure_handshake(oi_socket *socket)
   int r = gnutls_handshake(socket->session);
 
   if(gnutls_error_is_fatal(r)) {
-    RAISE_GNUTLS_ERROR(socket, r);
+    RAISE_ERROR(socket, OI_ERROR_GNUTLS, r);
     return OI_ERROR;
   }
 
@@ -186,7 +176,7 @@ secure_socket_send(oi_socket *socket)
                            ); 
 
   if(gnutls_error_is_fatal(sent)) {
-    RAISE_GNUTLS_ERROR(socket, sent);
+    RAISE_ERROR(socket, OI_ERROR_GNUTLS, sent);
     return OI_ERROR;
   }
 
@@ -200,8 +190,8 @@ secure_socket_send(oi_socket *socket)
       if(socket->read_action) {
         socket->read_action = secure_socket_send;
       } else {
-        /* GnuTLS needs read but already got EOF */
-        RAISE_OI_ERROR(socket, OI_ERROR_NEEDS_READ_BUT_ALREADY_GOT_EOF);
+        /* TODO GnuTLS needs read but already got EOF */
+        assert(0 && "needs read but already got EOF");
         return OI_ERROR;
       }
     }
@@ -232,7 +222,7 @@ secure_socket_recv(oi_socket *socket)
   recved = gnutls_record_recv(socket->session, recv_buffer, recv_buffer_size);
 
   if(gnutls_error_is_fatal(recved)) {
-    RAISE_GNUTLS_ERROR(socket, recved);
+    RAISE_ERROR(socket, OI_ERROR_GNUTLS, recved);
     return OI_ERROR;
   }
 
@@ -241,8 +231,8 @@ secure_socket_recv(oi_socket *socket)
       if(socket->write_action) {
         socket->write_action = secure_socket_recv;
       } else {
-        /* GnuTLS needs send but already closed write end */
-        RAISE_OI_ERROR(socket, OI_ERROR_NEEDS_WRITE_BUT_CANNOT);
+        /* TODO GnuTLS needs send but already closed write end */
+        assert(0 && "needs read but cannot");
         return OI_ERROR;
       }
     }
@@ -260,7 +250,8 @@ secure_socket_recv(oi_socket *socket)
       socket->write_action = secure_handshake;
       return OI_OKAY;
     } else {
-      RAISE_OI_ERROR(socket, OI_ERROR_NEEDS_WRITE_BUT_CANNOT);
+      /* TODO */
+      assert(0 && "needs read but cannot");
       return OI_ERROR;
     }
   }
@@ -290,7 +281,7 @@ secure_goodbye(oi_socket *socket, gnutls_close_request_t how)
   int r = gnutls_bye(socket->session, how);
 
   if(gnutls_error_is_fatal(r))  {
-    RAISE_GNUTLS_ERROR(socket, r);
+    RAISE_ERROR(socket, OI_ERROR_GNUTLS, r);
     return OI_ERROR;
   }
 
@@ -383,7 +374,7 @@ socket_send(oi_socket *socket)
         /* TODO maybe just clear write buffer instead of error? 
          * They should be able to read still from the socket. 
          */
-        RAISE_SYSTEM_ERROR(socket);
+        RAISE_ERROR(socket, OI_ERROR_SEND, errno);
         return OI_ERROR;
 
       default:
@@ -424,7 +415,7 @@ socket_recv(oi_socket *socket)
       /* A remote host refused to allow the network connection (typically
        * because it is not running the requested service). */
       case ECONNREFUSED:
-        RAISE_SYSTEM_ERROR(socket);
+        RAISE_ERROR(socket, OI_ERROR_RECV, errno);
         return OI_ERROR; 
 
       default:
@@ -656,7 +647,7 @@ on_io_event(struct ev_loop *loop, ev_io *watcher, int revents)
   oi_socket *socket = watcher->data;
 
   if(revents & EV_ERROR) {
-    RAISE_OI_ERROR(socket, OI_ERROR_UNKNOWN_LIBEV_ERROR);
+    RAISE_ERROR(socket, OI_ERROR_EV, 0);
     goto close;
   }
 

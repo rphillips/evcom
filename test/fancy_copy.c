@@ -96,7 +96,7 @@ on_connection_timeout (oi_socket *_)
 }
 
 static void
-on_connection_error (oi_socket *_, int domain, int code)
+on_connection_error (oi_socket *_, struct oi_error e)
 {
   exit(1);
 }
@@ -132,7 +132,7 @@ on_client_read (oi_socket *_, const void *buf, size_t count)
 }
 
 static void
-on_client_error (oi_socket *_, int domain, int code)
+on_client_error (oi_socket *_, struct oi_error e)
 {
   exit(1);
 }

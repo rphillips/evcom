@@ -18,12 +18,10 @@ on_peer_drain(oi_socket *socket)
   oi_socket_close(socket);
 }
 
-
 static void 
-on_peer_error2(oi_socket *socket, int domain, int code)
+on_peer_error2(oi_socket *socket, struct oi_error e)
 {
-  if(domain == OI_ERROR_DOMAIN_GNUTLS) return;
-  fprintf(stderr, "error on the peer socket: %s\n", oi_strerror(domain, code));
+  if(e.domain == OI_ERROR_GNUTLS) return;
   exit(1);
 }
 

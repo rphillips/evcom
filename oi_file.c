@@ -3,12 +3,21 @@
 #include <string.h>
 #include <unistd.h>
 #include <assert.h>
+#include <errno.h>
 
 #include <ev.h>
 #include <oi.h>
 
 #define RELEASE_BUF(buf) if(buf->release) { buf->release(buf); }
 #define DRAIN_CB(file)   if(file->on_drain) { file->on_drain(file); }
+#define RAISE_ERROR(s, _domain, _code) do { \
+  if(s->on_error) { \
+    struct oi_error __oi_error; \
+    __oi_error.domain = _domain; \
+    __oi_error.code = _code; \
+    s->on_error(s, __oi_error); \
+  } \
+} while(0) \
 
 /* forwards */
 static void dispatch_write_buf (oi_file *file);
@@ -20,7 +29,7 @@ after_read(oi_task *task, ssize_t recved)
   oi_file *file = task->data;
 
   if(recved == -1) {
-    perror("file read");
+    RAISE_ERROR(file, OI_ERROR_READ, errno);
     return;
   }
 
@@ -108,7 +117,7 @@ after_open(oi_task *task, int result)
   oi_file *file = task->data;
 
   if(result == -1) {
-    perror("open()");
+    RAISE_ERROR(file, OI_ERROR_OPEN, errno);
     return;
   }
 
@@ -190,7 +199,7 @@ after_write(oi_task *task, ssize_t result)
   oi_file *file = task->data;
 
   if(result == -1) {
-    perror("write()");
+    RAISE_ERROR(file, OI_ERROR_WRITE, errno);
     return;
   }
 
@@ -304,7 +313,7 @@ after_close(oi_task *task, int result)
   assert(oi_queue_empty(&file->write_queue));
 
   if(result == -1) {
-    perror("close()");
+    RAISE_ERROR(file, OI_ERROR_CLOSE, errno);
     return;
     // TODO try to close again? 
   }
@@ -341,7 +350,7 @@ after_sendfile(oi_task *task, ssize_t sent)
   file->write_socket = NULL;
 
   if(sent == -1) {
-    perror("sendfile");
+    RAISE_ERROR(file, OI_ERROR_SENDFILE, errno);
     return;
   }
 

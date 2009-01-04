@@ -21,9 +21,8 @@ on_peer_read(oi_socket *socket, const void *base, size_t len)
 }
 
 static void 
-on_peer_error(oi_socket *socket, int domain, int code)
+on_peer_error(oi_socket *socket, struct oi_error e)
 {
-  fprintf(stderr, "error on the peer socket: %s\n", oi_strerror(domain, code));
   exit(1);
 }
 
