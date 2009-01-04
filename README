@@ -1,18 +1,15 @@
-liboi is a C library for doing evented I/O. 
-
-This library builds on top of the libev library. It provides a simple
-object-oriented abstraction of socket and file I/O.  The special problem of
-transport layer security (or SSL) is handled in cooperation with GnuTLS.  
+liboi is a C library for doing evented I/O.  It is intended for building
+efficent internet programs.
 
 = Feature Summary
  
  * The library has a minimalist design
-   - Does not make any internal allocations 
-   - Does not wrap functionality of GnuTLS or libev. The user must
-     use those libraries in cooperation with liboi. 
+   - Does not make internal allocations 
+   - Does not wrap functionality of GnuTLS or libev. The user must use those
+     libraries in cooperation with liboi. 
  * Supports both server and client sockets.
  * Supports evented file I/O emulation through a thread pool.
- * SSL support.
+ * SSL support 
  * Sendfile (file to socket) with emulation on platforms that do not support
    it.
 

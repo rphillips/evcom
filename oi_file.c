@@ -121,9 +121,11 @@ after_open(oi_task *task, int result)
   maybe_do_read(file);
 }
 
-void
+int
 oi_file_open_path (oi_file *file, const char *path, int flags, mode_t mode)
 {
+  if(file->fd >= 0)
+    return -1;
   oi_task_init_open( &file->io_task
                    , after_open
                    , path
@@ -132,30 +134,40 @@ oi_file_open_path (oi_file *file, const char *path, int flags, mode_t mode)
                    );
   file->io_task.data = file;
   oi_async_submit(&file->async, &file->io_task);
+  return 0;
 }
 
-void
+int
 oi_file_open_stdin (oi_file *file)
 {
+  if(file->fd >= 0)
+    return -1;
   file->fd = STDIN_FILENO;
   if(file->on_open)
     file->on_open(file);
+  return 0;
 }
 
-void
+int
 oi_file_open_stdout (oi_file *file)
 {
+  if(file->fd >= 0)
+    return -1;
   file->fd = STDOUT_FILENO;
   if(file->on_open)
     file->on_open(file);
+  return 0;
 }
 
-void
+int
 oi_file_open_stderr (oi_file *file)
 {
+  if(file->fd >= 0)
+    return -1;
   file->fd = STDERR_FILENO;
   if(file->on_open)
     file->on_open(file);
+  return 0;
 }
 
 void
@@ -221,7 +233,7 @@ dispatch_write_buf(oi_file *file)
   if(oi_queue_empty(&file->write_queue)) 
     return;
 
-  oi_queue_t *q = oi_queue_last(&file->write_queue);
+  oi_queue *q = oi_queue_last(&file->write_queue);
   oi_queue_remove(q);
   oi_buf *buf = file->write_buf = oi_queue_data(q, oi_buf, queue);
 
@@ -236,21 +248,32 @@ dispatch_write_buf(oi_file *file)
   oi_async_submit(&file->async, &file->io_task);
 }
 
-void
+int
 oi_file_write (oi_file *file, oi_buf *buf)
 {
-  assert(file->fd >= 0 && "file not open!");
+  if(file->fd < 0)
+    return -1;
+  if(file->read_buffer)
+    return -2;
+  /* TODO better business check*/
+
   buf->written = 0;
   oi_queue_insert_head(&file->write_queue, &buf->queue);
   dispatch_write_buf(file);
+
+  return 0;
 }
 
 // Writes a string to the file. 
 // NOTE: Allocates memory. Avoid for performance applications.
-void
+int
 oi_file_write_simple (oi_file *file, const char *str, size_t len)
 {
-  assert(file->fd >= 0 && "file not open!");
+  if(file->fd < 0)
+    return -1;
+  if(file->read_buffer)
+    return -2;
+  /* TODO better business check*/
 
   oi_buf *buf = malloc(sizeof(oi_buf));
   buf->base = malloc(len);
@@ -259,13 +282,14 @@ oi_file_write_simple (oi_file *file, const char *str, size_t len)
   buf->release = oi_api_free_buf_with_heap_base;
 
   oi_file_write(file, buf);
+  return 0;
 }
 
 static void
 clear_write_queue(oi_file *file)
 {
   while(!oi_queue_empty(&file->write_queue)) {
-    oi_queue_t *q = oi_queue_last(&file->write_queue);
+    oi_queue *q = oi_queue_last(&file->write_queue);
     oi_queue_remove(q);
     oi_buf *buf = oi_queue_data(q, oi_buf, queue);
     RELEASE_BUF(buf);
@@ -329,23 +353,30 @@ after_sendfile(oi_task *task, ssize_t sent)
 }
 
 int
-oi_file_send (oi_file *source, oi_socket *destination, off_t offset, size_t count)
+oi_file_send (oi_file *file, oi_socket *destination, off_t offset, size_t count)
 {
+  if(file->fd < 0)
+    return -1;
+  if(file->read_buffer)
+    return -2;
+  /* TODO better business check*/
+
+  assert(file->write_socket == NULL);
   // (1) make sure the write queue on the socket is cleared.
   // 
   // (2)
   // 
-  assert(source->write_socket == NULL);
-  source->write_socket = destination;
-  oi_task_init_sendfile ( &source->io_task
+  file->write_socket = destination;
+  oi_task_init_sendfile ( &file->io_task
                         , after_sendfile
                         , destination->fd
-                        , source->fd
+                        , file->fd
                         , offset
                         , count
                         );
-  source->io_task.data = source;
-  oi_async_submit(&source->async, &source->io_task);
-  return -1;
+  file->io_task.data = file;
+  oi_async_submit(&file->async, &file->io_task);
+
+  return 0;
 }
 

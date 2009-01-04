@@ -34,7 +34,7 @@
 static int active_watchers = 0;
 static int active_workers = 0;
 static int readiness_pipe[2] = {-1, -1};
-static oi_queue_t waiting_tasks;
+static oi_queue waiting_tasks;
 static pthread_mutex_t queue_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t finished_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -199,9 +199,9 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count)
 }
 
 static oi_task*
-queue_shift(pthread_mutex_t *lock, oi_queue_t *queue)
+queue_shift(pthread_mutex_t *lock, oi_queue *queue)
 {
-  oi_queue_t *last = NULL;
+  oi_queue *last = NULL;
   pthread_mutex_lock(lock);
     if(!oi_queue_empty(queue)) {
       last = oi_queue_last(queue);
@@ -413,7 +413,7 @@ static void
 dispatch_tasks(oi_async *async)
 {
   while(!oi_queue_empty(&async->new_tasks)) {
-      oi_queue_t *last = oi_queue_last(&async->new_tasks);
+      oi_queue *last = oi_queue_last(&async->new_tasks);
     oi_queue_remove(last);
     oi_task *task = oi_queue_data(last, oi_task, queue);
 

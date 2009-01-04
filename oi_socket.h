@@ -61,7 +61,7 @@ struct oi_socket {
   int fd;
   struct ev_loop *loop;
   oi_server *server;
-  oi_queue_t out_stream;
+  oi_queue out_stream;
   size_t written;
   unsigned connected:1;
   unsigned secure:1;

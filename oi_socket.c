@@ -23,19 +23,16 @@
 # define GNUTLS_NEED_READ (gnutls_record_get_direction(socket->session) == 0)
 #endif
 
-#ifndef TRUE
-# define TRUE 1
-#endif
-#ifndef FALSE
-# define FALSE 0
-#endif
+#undef TRUE
+#define TRUE 1
+#undef FALSE
+#define FALSE 0
+#undef MIN
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
 
 #define OI_OKAY  0
 #define OI_AGAIN 1
 #define OI_ERROR 2 
-
-#undef MIN
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
 
 #define RAISE_OI_ERROR(s, code)     { if(s->on_error) { s->on_error(s, OI_ERROR_DOMAIN_OI    , code); } }
 #define RAISE_SYSTEM_ERROR(s)       { if(s->on_error) { s->on_error(s, OI_ERROR_DOMAIN_SYSTEM, errno); } }
@@ -90,7 +87,7 @@ half_close(oi_socket *socket)
 static void
 update_write_buffer_after_send(oi_socket *socket, ssize_t sent)
 {
-  oi_queue_t *q = oi_queue_last(&socket->out_stream);
+  oi_queue *q = oi_queue_last(&socket->out_stream);
   oi_buf *to_write = oi_queue_data(q, oi_buf, queue);
   to_write->written += sent;
   socket->written += sent;
@@ -178,7 +175,7 @@ secure_socket_send(oi_socket *socket)
     return OI_AGAIN;
   }
 
-  oi_queue_t *q = oi_queue_last(&socket->out_stream);
+  oi_queue *q = oi_queue_last(&socket->out_stream);
   oi_buf *to_write = oi_queue_data(q, oi_buf, queue);
 
   assert(socket->secure);
@@ -357,7 +354,7 @@ socket_send(oi_socket *socket)
     return OI_AGAIN;
   }
 
-  oi_queue_t *q = oi_queue_last(&socket->out_stream);
+  oi_queue *q = oi_queue_last(&socket->out_stream);
   oi_buf *to_write = oi_queue_data(q, oi_buf, queue);
   
   int flags = 0;
@@ -645,7 +642,7 @@ static void
 release_write_buffer(oi_socket *socket)
 {
   while(!oi_queue_empty(&socket->out_stream)) {
-    oi_queue_t *q = oi_queue_last(&socket->out_stream);
+    oi_queue *q = oi_queue_last(&socket->out_stream);
     oi_buf *buf = oi_queue_data(q, oi_buf, queue);
     oi_queue_remove(q);
     if(buf->release) { buf->release(buf); }

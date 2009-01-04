@@ -14,8 +14,8 @@ struct oi_async {
   ev_async watcher;  
   struct ev_loop *loop;
 
-  oi_queue_t finished_tasks;
-  oi_queue_t new_tasks;
+  oi_queue finished_tasks;
+  oi_queue new_tasks;
 
   /* public */
   void *data;
@@ -24,7 +24,7 @@ struct oi_async {
 struct oi_task {
   /* private */
   oi_async *async;
-  oi_queue_t queue;
+  oi_queue queue;
   int type;
   union {
 

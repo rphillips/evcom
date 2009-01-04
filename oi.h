@@ -4,10 +4,10 @@
 #include <stddef.h> /* offsetof() */
 
 /* Copyright (C) Igor Sysoev * from nginx ngx_queue.h */
-typedef struct oi_queue oi_queue_t;
+typedef struct oi_queue oi_queue;
 struct oi_queue {
-    oi_queue_t  *prev;
-    oi_queue_t  *next;
+    oi_queue  *prev;
+    oi_queue  *next;
 };
 
 #define oi_queue_init(q)                                                     \
@@ -49,7 +49,7 @@ struct oi_buf {
 
   /* private */
   size_t written;
-  oi_queue_t queue;
+  oi_queue queue;
 };
 
 #include <oi_socket.h>
