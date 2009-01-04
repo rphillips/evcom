@@ -122,6 +122,10 @@ test/test_sleeping_tasks: test/sleeping_tasks.c $(OUTPUT_A)
 test/fancy_copy: test/fancy_copy.c $(OUTPUT_A)
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
 
+doc: oi.3
+oi.3: oi.pod
+	pod2man -c "liboi - evented I/O" oi.pod > oi.3
+
 clean:
 	rm -f ${OBJ} $(OUTPUT_A) $(OUTPUT_LIB) $(NAME)-${VERSION}.tar.gz 
 	rm -f test/test_* test/fancy_copy
