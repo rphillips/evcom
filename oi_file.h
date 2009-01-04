@@ -32,7 +32,7 @@ struct oi_file {
   oi_task io_task;
   struct ev_loop *loop;
   oi_queue write_queue;
-  oi_buf *write_buf;
+  oi_buf *write_buf; /* TODO this pointer is unnecessary - remove and just look at first element of the queue */
   oi_socket *write_socket;
   void *read_buffer;
   size_t read_buffer_size;
@@ -41,11 +41,11 @@ struct oi_file {
   int fd;
    
   /* public */
-  void (*on_open)      (oi_file *);
-  void (*on_read)      (oi_file *, size_t count);
-  void (*on_drain)     (oi_file *);
-  void (*on_error)     (oi_file *, struct oi_error);
-  void (*on_close)     (oi_file *);
+  void (*on_open)  (oi_file *);
+  void (*on_read)  (oi_file *, size_t count);
+  void (*on_drain) (oi_file *);
+  void (*on_error) (oi_file *, struct oi_error);
+  void (*on_close) (oi_file *);
   void *data;
 };
 

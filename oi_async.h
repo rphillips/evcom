@@ -21,6 +21,10 @@ struct oi_async {
   void *data;
 }; 
 
+typedef void (*oi_task_int_cb)(oi_task *, int result);
+typedef void (*oi_task_uint_cb)(oi_task *, unsigned int result);
+typedef void (*oi_task_ssize_cb)(oi_task *, ssize_t result);
+
 struct oi_task {
   /* private */
   oi_async *async;
@@ -32,7 +36,7 @@ struct oi_task {
       const char *pathname;
       int flags;
       mode_t mode;
-      void (*cb) (oi_task *, int result);
+      oi_task_int_cb cb;
       int result;
     } open;
 
@@ -40,7 +44,7 @@ struct oi_task {
       int fd;
       void *buf;
       size_t count;
-      void (*cb) (oi_task *, ssize_t result);
+      oi_task_ssize_cb cb;
       ssize_t result;
     } read;
 
@@ -48,28 +52,28 @@ struct oi_task {
       int fd;
       const void *buf;
       size_t count;
-      void (*cb) (oi_task *, ssize_t result);
+      oi_task_ssize_cb cb;
       ssize_t result;
     } write;
 
     struct {
       int fd;
-      void (*cb) (oi_task *, int result);
+      oi_task_int_cb cb;
       int result;
     } close;
 
     struct {
       unsigned int seconds;
-      void (*cb) (oi_task *, unsigned int result);
+      oi_task_uint_cb cb;
       unsigned int result;
     } sleep;
 
     struct {
-      int ofd;
-      int ifd;
+      int out_fd;
+      int in_fd;
       off_t offset;
       size_t count;
-      void (*cb) (oi_task *, ssize_t result);
+      oi_task_ssize_cb cb;
       ssize_t result;
     } eio__sendfile;
 
@@ -78,7 +82,7 @@ struct oi_task {
       const char *servname; /* restrict ? */
       struct addrinfo *hints;
       struct addrinfo **res; /* restrict ? */
-      void (*cb) (oi_task *, int result);
+      oi_task_int_cb cb;
       int result;
     } getaddrinfo;
     
@@ -113,70 +117,79 @@ enum { OI_TASK_OPEN
      , OI_TASK_GETADDRINFO
      };
 
-#define oi_task_init_common(task) do {\
+#define oi_task_init_common(task, _type) do {\
   (task)->active = 0;\
   (task)->async = NULL;\
+  (task)->type = _type;\
 } while(0)
 
-#define oi_task_init_open(task, _cb, _pathname, _flags, _mode) do { \
-  oi_task_init_common(task); \
-  (task)->type = OI_TASK_OPEN; \
-  (task)->params.open.cb = _cb; \
-  (task)->params.open.pathname = _pathname; \
-  (task)->params.open.flags = _flags; \
-  (task)->params.open.mode = _mode; \
-} while(0)
+static inline void 
+oi_task_init_open(oi_task *t, oi_task_int_cb cb, const char *pathname, int flags, mode_t mode) 
+{
+  oi_task_init_common(t, OI_TASK_OPEN);
+  t->params.open.cb = cb;
+  t->params.open.pathname = pathname;
+  t->params.open.flags = flags;
+  t->params.open.mode = mode;
+}
 
-#define oi_task_init_read(task, _cb, _fd, _buf, _count) do { \
-  oi_task_init_common(task); \
-  (task)->type = OI_TASK_READ; \
-  (task)->params.read.cb = _cb; \
-  (task)->params.read.fd = _fd; \
-  (task)->params.read.buf = _buf; \
-  (task)->params.read.count = _count; \
-} while(0)
+static inline void 
+oi_task_init_read(oi_task *t, oi_task_ssize_cb cb, int fd, void *buf, size_t count) 
+{
+  oi_task_init_common(t, OI_TASK_READ);
+  t->params.read.cb = cb;
+  t->params.read.fd = fd;
+  t->params.read.buf = buf;
+  t->params.read.count = count;
+}
 
-#define oi_task_init_write(task, _cb, _fd, _buf, _count) do { \
-  oi_task_init_common(task); \
-  (task)->type = OI_TASK_WRITE; \
-  (task)->params.write.cb = _cb; \
-  (task)->params.write.fd = _fd; \
-  (task)->params.write.buf = _buf; \
-  (task)->params.write.count = _count; \
-} while(0)
+static inline void 
+oi_task_init_write(oi_task *t, oi_task_ssize_cb cb, int fd, const void *buf, size_t count) 
+{
+  oi_task_init_common(t, OI_TASK_WRITE);
+  t->params.write.cb = cb;
+  t->params.write.fd = fd;
+  t->params.write.buf = buf;
+  t->params.write.count = count;
+}
 
-#define oi_task_init_close(task, _cb, _fd) do { \
-  oi_task_init_common(task); \
-  (task)->type = OI_TASK_CLOSE; \
-  (task)->params.close.cb = _cb; \
-  (task)->params.close.fd = _fd; \
-} while(0)
+static inline void 
+oi_task_init_close(oi_task *t, oi_task_int_cb cb, int fd) 
+{
+  oi_task_init_common(t, OI_TASK_CLOSE);
+  t->params.close.cb = cb;
+  t->params.close.fd = fd;
+}
 
-#define oi_task_init_sleep(task, _cb, _seconds) do { \
-  oi_task_init_common(task); \
-  (task)->type = OI_TASK_SLEEP; \
-  (task)->params.sleep.cb = _cb; \
-  (task)->params.sleep.seconds = _seconds; \
-} while(0)
+static inline void 
+oi_task_init_sleep(oi_task *t, oi_task_uint_cb cb, unsigned int seconds) 
+{
+  oi_task_init_common(t, OI_TASK_SLEEP);
+  t->params.sleep.cb = cb;
+  t->params.sleep.seconds = seconds;
+}
 
-#define oi_task_init_sendfile(task, _cb, _ofd, _ifd, _offset, _count) do { \
-  oi_task_init_common(task); \
-  (task)->type = OI_TASK_SENDFILE; \
-  (task)->params.eio__sendfile.cb = _cb; \
-  (task)->params.eio__sendfile.ofd = _ofd; \
-  (task)->params.eio__sendfile.ifd = _ifd; \
-  (task)->params.eio__sendfile.offset = _offset; \
-  (task)->params.eio__sendfile.count = _count; \
-} while(0)
+static inline void 
+oi_task_init_sendfile(oi_task *t, oi_task_ssize_cb cb, int out_fd, int in_fd, off_t offset, size_t count) 
+{
+  oi_task_init_common(t, OI_TASK_SENDFILE);
+  t->params.eio__sendfile.cb = cb;
+  t->params.eio__sendfile.out_fd = out_fd;
+  t->params.eio__sendfile.in_fd = in_fd;
+  t->params.eio__sendfile.offset = offset;
+  t->params.eio__sendfile.count = count;
+}
 
-#define oi_task_init_getaddrinfo(task, _cb, _nodename, _servname, _ai_family, _ai_socktype, _ai_flags, _res) do { \
-  oi_task_init_common(task); \
-  (task)->type = OI_TASK_GETADDRINFO; \
-  (task)->params.getaddrinfo.cb = _cb; \
-  (task)->params.getaddrinfo.nodename = _nodename; \
-  (task)->params.getaddrinfo.servname = _servname; \
-  (task)->params.getaddrinfo.hints = _hints; \
-  (task)->params.getaddrinfo.res = _res; \
-} while(0)
+static inline void 
+oi_task_init_getaddrinfo(oi_task *t, oi_task_int_cb cb, const char *node, 
+                          const char *service, struct addrinfo *hints, struct addrinfo **res) 
+{
+  oi_task_init_common(t, OI_TASK_GETADDRINFO);
+  t->params.getaddrinfo.cb = cb;
+  t->params.getaddrinfo.nodename = node;
+  t->params.getaddrinfo.servname = service;
+  t->params.getaddrinfo.hints = hints;
+  t->params.getaddrinfo.res = res;
+}
 
 #endif /* oi_async_h */

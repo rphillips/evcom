@@ -247,7 +247,7 @@ execute_task(oi_task *t)
     case OI_TASK_WRITE:       P3(write, fd, buf, count);
     case OI_TASK_CLOSE:       P1(close, fd);
     case OI_TASK_SLEEP:       P1(sleep, seconds);
-    case OI_TASK_SENDFILE:    P4(eio__sendfile, ofd, ifd, offset, count);
+    case OI_TASK_SENDFILE:    P4(eio__sendfile, out_fd, in_fd, offset, count);
     case OI_TASK_GETADDRINFO: P4(getaddrinfo, nodename, servname, hints, res);
     default: 
       assert(0 && "unknown task type");
