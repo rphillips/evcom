@@ -13,11 +13,17 @@ efficent internet programs.
  * Sendfile (file to socket) with emulation on platforms that do not support
    it.
 
-= Usage
+= Building
 
-The library is new and under development. Please look at the header files for
-current information-it should be mostly self-explanatory. 
-The test directory has several example programs. 
+1. Edit config.mk. You almost certainly will need to set the 
+   EVDIR and GNUTLSDIR variables.
+
+2. Run make
+
+= Documentation
+
+  make doc
+  man ./oi.3
 
 = Website 
 
