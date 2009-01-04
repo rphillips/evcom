@@ -118,6 +118,7 @@ main(int argc, const char *argv[])
     servinfo = malloc(sizeof(struct addrinfo));
     servinfo->ai_family = AF_UNIX;
     servinfo->ai_socktype = SOCK_STREAM;
+    servinfo->ai_protocol = 0;
 
     struct sockaddr_un *sockaddr = calloc(sizeof(struct sockaddr_un), 1);
     sockaddr->sun_family = AF_UNIX;
@@ -150,7 +151,9 @@ main(int argc, const char *argv[])
   assert(successful_ping_count == EXCHANGES + 1);
   assert(nconnections == 1);
 
+#if TCP
   freeaddrinfo(servinfo);
+#endif
 
   return 0;
 }
