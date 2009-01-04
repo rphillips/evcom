@@ -215,13 +215,6 @@ queue_shift(pthread_mutex_t *lock, oi_queue_t *queue)
   return oi_queue_data(last, oi_task, queue);
 }
 
-static void
-worker_free(struct worker *worker) 
-{
-  /* worker->task = NULL */
-  active_workers--;
-}
-
 #define P1(name,a) { \
   t->params.name.result = name( t->params.name.a ); \
   break; \
@@ -268,11 +261,9 @@ attempt_to_get_a_task(struct worker *worker)
 {
   char dummy;
   assert(readiness_pipe[0] > 0);
-  int red = read(readiness_pipe[0], &dummy, 1);
-  if(red == -1) {
-    if(errno == EAGAIN)
-      return;
-    perror("read()");
+  int r = read(readiness_pipe[0], &dummy, 1);
+  if(r == -1 && (errno != EAGAIN || errno != EINTR)) {
+    perror("read(readiness_pipe[0])");
     return;
   }
 
@@ -301,6 +292,7 @@ attempt_to_get_a_task(struct worker *worker)
 void *
 worker_loop(void *data)
 {
+  int r;
   struct worker *worker = data;
   fd_set readfds;
   FD_ZERO(&readfds);
@@ -310,11 +302,12 @@ worker_loop(void *data)
   assert(active_workers <= NWORKERS);
 
   while(1) {
-    select(1+readiness_pipe[0], &readfds, 0, 0, 0);
+    r = select(1+readiness_pipe[0], &readfds, 0, 0, 0);
+    if(r == -1) break;
     attempt_to_get_a_task(worker);
   }
+  active_workers--;
 
-  worker_free(worker);
   return NULL;
 }
 

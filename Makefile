@@ -1,6 +1,6 @@
 include config.mk
 
-CFLAGS += -fPIC -I.
+CFLAGS  += -fPIC -I.
 LDFLAGS += -pthread
 LDOPT    = -shared
 SUFFIX   = so
@@ -20,7 +20,7 @@ ifeq ($(uname_S),HP-UX)
 endif
 ifeq ($(uname_S),Darwin)
 	CFLAGS += -D__darwin=1
-	SONAME = dylib
+	SUFFIX = dylib
 endif
 
 ifdef EVDIR
@@ -46,23 +46,6 @@ else
 	CFLAGS += -DHAVE_SENDFILE=1
 endif
 
-ifneq ($(findstring $(MAKEFLAGS),s),s)
-ifndef V
-	QUIET_CC       = @echo '   ' CC $@;
-	QUIET_AR       = @echo '   ' AR $@;
-	QUIET_LINK     = @echo '   ' LINK $@;
-	QUIET_RANLIB   = @echo '   ' RANLIB $@;
-	QUIET_BUILT_IN = @echo '   ' BUILTIN $@;
-	QUIET_GEN      = @echo '   ' GEN $@;
-	QUIET_SUBDIR0  = +@subdir=
-	QUIET_SUBDIR1  = ;$(NO_SUBDIR) echo '   ' SUBDIR $$subdir; \
-			 $(MAKE) $(PRINT_DIR) -C $$subdir
-	export V
-	export QUIET_GEN
-	export QUIET_BUILT_IN
-endif
-endif
-
 DEP = oi_socket.h oi_async.h oi_file.h
 SRC = oi_socket.c oi_async.c oi_file.c
 OBJ = ${SRC:.c=.o}
@@ -79,19 +62,19 @@ TESTS = test/test_ping_pong_tcp_secure test/test_ping_pong_unix_secure test/test
 all: $(OUTPUT_LIB) $(OUTPUT_A) $(TESTS)
 
 $(OUTPUT_LIB): $(OBJ) 
-	$(QUIET_LINK)$(LINKER) -o $(OUTPUT_LIB) $(OBJ) $(SONAME) $(LDFLAGS)
+	$(LINKER) -o $(OUTPUT_LIB) $(OBJ) $(SONAME) $(LDFLAGS)
 
 $(OUTPUT_A): $(OBJ)
-	$(QUIET_AR)$(AR) cru $(OUTPUT_A) $(OBJ)
-	$(QUIET_RANLIB)$(RANLIB) $(OUTPUT_A)
+	$(AR) cru $(OUTPUT_A) $(OBJ)
+	$(RANLIB) $(OUTPUT_A)
 
 .c.o:
-	$(QUIET_CC)$(CC) -c ${CFLAGS} $<
+	$(CC) -c ${CFLAGS} $<
 
 ${OBJ}: ${DEP}
 
-FAIL=echo "\033[1;31mFAIL\033[m"
-PASS=echo "\033[1;32mPASS\033[m"
+FAIL=echo "FAIL"
+PASS=echo "PASS"
 
 /tmp/oi_fancy_copy_src:
 	@perl -e "print('C'x(1024*40))" > /tmp/oi_fancy_copy_src
@@ -106,38 +89,37 @@ test: $(TESTS) /tmp/oi_fancy_copy_src
 	md5sum /tmp/oi_fancy_copy*
 
 test/test_ping_pong_tcp_secure: test/ping_pong.c $(OUTPUT_A)
-	$(QUIET_CC)$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=1
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=1
 
 test/test_ping_pong_unix_secure: test/ping_pong.c $(OUTPUT_A)
-	$(QUIET_CC)$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0 -DSECURE=1
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0 -DSECURE=1
 
 test/test_ping_pong_tcp_clear: test/ping_pong.c $(OUTPUT_A)
-	$(QUIET_CC)$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=0
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=0
 
 test/test_ping_pong_unix_clear: test/ping_pong.c $(OUTPUT_A)
-	$(QUIET_CC)$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0 -DSECURE=0
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0 -DSECURE=0
 
 test/test_connection_interruption_tcp_secure: test/connection_interruption.c $(OUTPUT_A)
-	$(QUIET_CC)$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=1
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=1
 
 test/test_connection_interruption_unix_secure: test/connection_interruption.c $(OUTPUT_A)
-	$(QUIET_CC)$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0 -DSECURE=1
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0 -DSECURE=1
 
 test/test_connection_interruption_tcp_clear: test/connection_interruption.c $(OUTPUT_A)
-	$(QUIET_CC)$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=0
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=0
 
 test/test_connection_interruption_unix_clear: test/connection_interruption.c $(OUTPUT_A)
-	$(QUIET_CC)$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0 -DSECURE=0
-
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0 -DSECURE=0
 
 test/test_stdout: test/stdout.c $(OUTPUT_A)
-	$(QUIET_CC)$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
 
 test/test_sleeping_tasks: test/sleeping_tasks.c $(OUTPUT_A)
-	$(QUIET_CC)$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
 
 test/fancy_copy: test/fancy_copy.c $(OUTPUT_A)
-	$(QUIET_CC)$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
 
 clean:
 	@echo CLEANING

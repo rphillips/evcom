@@ -14,14 +14,16 @@
 static  oi_file file; 
 static  oi_file out; 
 
+#define READ_BUFSIZE (50)
+static char read_buf[READ_BUFSIZE];
+
 static void
 on_open(oi_file *f)
 {
 # define OPEN_MSG "\nopened the file\n~~~~~~~~~~~~~~~~~~~~~~\n"
   oi_file_write_simple(&out, OPEN_MSG, sizeof(OPEN_MSG));
   
-  int r = oi_file_read_simple(f, 100);
-  assert(r >= 0);
+  oi_file_read_start(f, read_buf, READ_BUFSIZE);
 }
 
 static void
@@ -34,9 +36,9 @@ on_close(oi_file *f)
 }
 
 static void
-on_read(oi_file *f, oi_buf *buf, size_t recved)
+on_read(oi_file *f, size_t recved)
 {
-  oi_file_write_simple(&out, buf->base, recved);
+  oi_file_write_simple(&out, read_buf, recved);
   oi_file_close(f);
 }
 

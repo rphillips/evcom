@@ -216,6 +216,9 @@ main(int argc, char *argv[])
 
   ev_loop(loop, 0);
 
+  printf("\noi_file: %d bytes\n", sizeof(oi_file));
+  printf("oi_socket: %d bytes\n", sizeof(oi_socket));
+
   return 0;
 }
 

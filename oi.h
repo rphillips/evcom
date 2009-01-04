@@ -44,7 +44,7 @@ struct oi_buf {
   /* public */
   char *base;
   size_t len;
-  void (*release) (oi_buf *); /* called when oi_socket is done with the object */
+  void (*release) (oi_buf *); /* called when oi is done with the object */
   void *data;
 
   /* private */

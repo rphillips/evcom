@@ -1,6 +1,3 @@
-# Define V=1 to have a more verbose compile.
-#
-#
 # Define EVDIR=/foo/bar if your libev header and library files are in
 # /foo/bar/include and /foo/bar/lib directories.
 EVDIR=$(HOME)/local/libev
@@ -25,10 +22,8 @@ uname_P := $(shell sh -c 'uname -p 2>/dev/null || echo not')
 
 # CFLAGS and LDFLAGS are for the users to override from the command line.
 
-CFLAGS = -g -O2 
-LDFLAGS = -s
-ALL_CFLAGS = $(CFLAGS)
-ALL_LDFLAGS = $(LDFLAGS)
+CFLAGS	= -g 
+LDFLAGS	= 
 
 PREFIX = $(HOME)/local/liboi
 
