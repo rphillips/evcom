@@ -21,8 +21,7 @@ uname_R := $(shell sh -c 'uname -r 2>/dev/null || echo not')
 uname_P := $(shell sh -c 'uname -p 2>/dev/null || echo not')
 
 # CFLAGS and LDFLAGS are for the users to override from the command line.
-
-CFLAGS	= -g 
+CFLAGS	= -g -O2
 LDFLAGS	= 
 
 PREFIX = $(HOME)/local/liboi

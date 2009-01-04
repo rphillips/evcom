@@ -25,21 +25,22 @@ endif
 
 ifdef EVDIR
 	CFLAGS += -I$(EVDIR)/include
-	LDFLAGS += -L$(EVDIR)/lib -lev
-else
-	LDFLAGS += -lev
+	LDFLAGS += -L$(EVDIR)/lib
 endif
+LDFLAGS += -lev
+
 ifdef GNUTLSDIR
 	CFLAGS += -I$(GNUTLSDIR)/include
-	LDFLAGS += -L$(GNUTLSDIR)/lib -lgnutls
-else
-	LDFLAGS += -lgnutls
+	LDFLAGS += -L$(GNUTLSDIR)/lib
 endif
+LDFLAGS += -lgnutls
+
 ifdef NO_PREAD
 	CFLAGS += -DHAVE_PREADWRITE=0
 else
 	CFLAGS += -DHAVE_PREADWRITE=1
 endif
+
 ifdef NO_SENDFILE
 	CFLAGS += -DHAVE_SENDFILE=0
 else
@@ -122,9 +123,8 @@ test/fancy_copy: test/fancy_copy.c $(OUTPUT_A)
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
 
 clean:
-	@echo CLEANING
-	@rm -f ${OBJ} $(OUTPUT_A) $(OUTPUT_LIB) $(NAME)-${VERSION}.tar.gz 
-	@rm -f test/test_* test/fancy_copy
+	rm -f ${OBJ} $(OUTPUT_A) $(OUTPUT_LIB) $(NAME)-${VERSION}.tar.gz 
+	rm -f test/test_* test/fancy_copy
 
 install: $(OUTPUT_LIB) $(OUTPUT_A)
 	@echo INSTALLING ${OUTPUT_A} and ${OUTPUT_LIB} to ${PREFIX}/lib

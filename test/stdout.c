@@ -14,23 +14,22 @@
 static  oi_file file; 
 static  oi_file out; 
 
-#define READ_BUFSIZE (50)
+#define READ_BUFSIZE (5)
 static char read_buf[READ_BUFSIZE];
+# define SEP "~~~~~~~~~~~~~~~~~~~~~~\n"
 
 static void
 on_open(oi_file *f)
 {
-# define OPEN_MSG "\nopened the file\n~~~~~~~~~~~~~~~~~~~~~~\n"
-  oi_file_write_simple(&out, OPEN_MSG, sizeof(OPEN_MSG));
-  
+  oi_file_write_simple(&out, "\n", 1);
+  oi_file_write_simple(&out, SEP, sizeof(SEP));
   oi_file_read_start(f, read_buf, READ_BUFSIZE);
 }
 
 static void
 on_close(oi_file *f)
 {
-# define CLOSE_MSG "\n~~~~~~~~~~~~~~~~~~~~~~\nclosed the file\n"
-  oi_file_write_simple(&out, CLOSE_MSG, sizeof(CLOSE_MSG));
+  oi_file_write_simple(&out, SEP, sizeof(SEP));
   oi_file_detach(f);  
   out.on_drain = oi_file_detach;
 }
@@ -38,8 +37,10 @@ on_close(oi_file *f)
 static void
 on_read(oi_file *f, size_t recved)
 {
-  oi_file_write_simple(&out, read_buf, recved);
-  oi_file_close(f);
+  if(recved == 0) /* EOF */
+    oi_file_close(f);
+  else
+    oi_file_write_simple(&out, read_buf, recved);
 }
 
 int
