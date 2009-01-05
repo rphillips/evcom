@@ -23,7 +23,7 @@ on_peer_read(oi_socket *socket, const void *base, size_t len)
 static void 
 on_peer_error(oi_socket *socket, struct oi_error e)
 {
-  exit(1);
+  assert(0);
 }
 
 static void 
@@ -77,7 +77,7 @@ on_client_read(oi_socket *socket, const void *base, size_t len)
     } 
     oi_socket_write_simple(socket, PING, sizeof PING);
   } else {
-    exit(1);
+    assert(0);
   }
 }
 

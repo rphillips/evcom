@@ -34,20 +34,20 @@ static void
 on_client_timeout(oi_socket *socket)
 {
   printf("client connection timeout\n");
-  exit(1);
+  assert(0);
 }
 
 static void 
 on_peer_timeout(oi_socket *socket)
 {
   fprintf(stderr, "peer connection timeout\n");
-  exit(1);
+  assert(0);
 }
 
 static void 
 on_client_error(oi_socket *socket, struct oi_error e)
 {
-  exit(1);
+  assert(0);
 }
 
 

@@ -92,13 +92,13 @@ on_connection_connect (oi_socket *_)
 static void
 on_connection_timeout (oi_socket *_)
 {
-  exit(1);
+  assert(0);
 }
 
 static void
 on_connection_error (oi_socket *_, struct oi_error e)
 {
-  exit(1);
+  assert(0);
 }
 
 static void
@@ -128,13 +128,13 @@ on_server_connection(oi_server *_, struct sockaddr *addr, socklen_t len)
 static void
 on_client_read (oi_socket *_, const void *buf, size_t count)
 {
-  exit(1);
+  assert(0);
 }
 
 static void
 on_client_error (oi_socket *_, struct oi_error e)
 {
-  exit(1);
+  assert(0);
 }
 
 static void
@@ -163,7 +163,7 @@ on_file_src_open (oi_file *_)
 static void
 on_client_timeout (oi_socket *_)
 {
-  exit(1);
+  assert(0);
 }
 
 int

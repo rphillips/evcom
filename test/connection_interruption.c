@@ -22,7 +22,7 @@ static void
 on_peer_error2(oi_socket *socket, struct oi_error e)
 {
   if(e.domain == OI_ERROR_GNUTLS) return;
-  exit(1);
+  assert(0);
 }
 
 static oi_socket* 
@@ -73,7 +73,7 @@ on_client_read(oi_socket *socket, const void *base, size_t len)
   if(strcmp(buf, "BYE") == 0) {
     oi_socket_close(socket);
   } else {
-    exit(1);
+    assert(0);
   }
 }
 
