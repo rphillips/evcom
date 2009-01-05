@@ -48,6 +48,10 @@ The callbacks inside C<oi_socket> are
     void (*on_close)     (oi_socket *);
     void (*on_timeout)   (oi_socket *);
 
+A the memory for a socket is released when the C<on_close()> callback is
+made. That is, the user may free the memory for the socket with-in the
+C<on_close()> callback.
+
 =over 4
 
 =item void oi_socket_init (oi_socket *, float timeout);
@@ -149,7 +153,13 @@ tends to be overkill for most people. By default liboi will not wait for
 peer to send a matching bye message. If you require this then set
 C<socket.wait_for_secure_hangup> to 1.
 
-When the close is complete C<socket.on_close()> is made.
+When the close is complete C<on_close()> is made. The C<on_close()>
+callback is not made until the program returns to the event loop. This is
+because C<on_close()> may free the socket memory and if C<on_close()> was
+called from C<oi_socket_close()>, then the socket object might unexpectedly
+be gone. To summarize: C<oi_socket_close()> does not call C<on_close()> and
+the socket memory is still accessable immediately after making calling
+C<oi_socket_close()>. 
 
 =item void oi_socket_set_secure_session (oi_socket *, gnutls_session_t);
 

@@ -1,6 +1,8 @@
 liboi is a C library for doing evented I/O. It is intended for building
 efficent internet programs.
 
+liboi is released under the X11 license.
+
 = Feature Summary
  
  * The library has a minimalist design
@@ -15,23 +17,18 @@ efficent internet programs.
 
 = Building
 
-1. Edit config.mk. You almost certainly will need to set the 
-   EVDIR and GNUTLSDIR variables.
-
-2. Run make
+ 1 Edit config.mk. You almost certainly will need to set the EVDIR and
+   GNUTLSDIR variables.
+ 2 Run "make"
 
 = Documentation
 
-  make doc
-  man ./oi.3
+ 1 make doc
+ 2 man ./oi.3
 
 = Website 
 
 http://github.com/ry/liboi
-
-= License 
-
-liboi is released under the X11 license.
 
 = Author 
 
