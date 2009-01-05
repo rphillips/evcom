@@ -54,7 +54,9 @@ full_close(oi_socket *socket)
   socket->read_action = NULL;
   socket->write_action = NULL;
 
-  /* TODO set timer to zero/idle watcher?  so we get a callback soon */
+  if(socket->loop) {
+    ev_feed_event(socket->loop, &socket->read_watcher, EV_READ);
+  }
   return OI_OKAY;
 }
 
@@ -840,15 +842,20 @@ oi_socket_attach(oi_socket *socket, struct ev_loop *loop)
 
   if(socket->write_action) 
     ev_io_start(loop, &socket->write_watcher);
+
+  /* make sure the io_event happens soon  in the case we're being reattached */
+  ev_feed_event(loop, &socket->read_watcher, EV_READ);
 }
 
 void
 oi_socket_detach(oi_socket *socket)
 {
-  ev_io_stop(socket->loop, &socket->write_watcher);
-  ev_io_stop(socket->loop, &socket->read_watcher);
-  ev_timer_stop(socket->loop, &socket->timeout_watcher);
-  socket->loop = NULL;
+  if(socket->loop) {
+    ev_io_stop(socket->loop, &socket->write_watcher);
+    ev_io_stop(socket->loop, &socket->read_watcher);
+    ev_timer_stop(socket->loop, &socket->timeout_watcher);
+    socket->loop = NULL;
+  }
 }
 
 void

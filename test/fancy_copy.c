@@ -104,7 +104,6 @@ on_connection_error (oi_socket *_, struct oi_error e)
 static void
 on_connection_close (oi_socket *_)
 {
-  oi_socket_detach(&connection);
   oi_server_close(&server);
   oi_server_detach(&server);
 }
@@ -201,7 +200,7 @@ main(int argc, char *argv[])
   client.on_error   = on_client_error;
   client.on_connect = on_client_connect;
   client.on_timeout = on_client_timeout;
-  client.on_close   = oi_socket_detach;
+  //client.on_close   = oi_socket_detach;
   client.on_drain   = on_client_drain;
   r = oi_socket_connect(&client, servinfo);
   assert(r >= 0 && "problem connecting");
