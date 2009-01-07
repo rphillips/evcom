@@ -420,8 +420,13 @@ socket_recv(oi_socket *socket)
         RAISE_ERROR(socket, OI_ERROR_RECV, errno);
         return OI_ERROR; 
 
+      case ECONNRESET:
+        RAISE_ERROR(socket, OI_ERROR_RECV, errno);
+        return OI_ERROR; 
+
       default:
         perror("recv()");
+        printf("unmatched errno %d\n", errno);
         assert(0 && "recv returned error that oi should have caught before.");
     }
   }
