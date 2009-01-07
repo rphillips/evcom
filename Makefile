@@ -145,7 +145,7 @@ install: $(OUTPUT_LIB) $(OUTPUT_A)
 	install -m755 ${OUTPUT_LIB} ${PREFIX}/lib
 	ln -sfn $(PREFIX)/lib/$(OUTPUT_LIB) $(PREFIX)/lib/$(NAME).so
 	@echo INSTALLING headers to ${PREFIX}/include
-	install -m644 oi_*.h ${PREFIX}/include 
+	install -m644 oi*.h ${PREFIX}/include 
 
 uninstall:
 	@echo REMOVING so from ${PREFIX}/lib
