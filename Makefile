@@ -88,12 +88,13 @@ PASS=echo "PASS"
 
 test: $(TESTS) /tmp/oi_fancy_copy_src
 	@for i in test/test_*; do \
-	  echo -n "$$i: ";	\
-		$$i && $(PASS) || $(FAIL); \
+		if [ ! -d $$i ]; then \
+			echo "$$i: ";	\
+			$$i && $(PASS) || $(FAIL); \
+		fi \
 	done 
-	@echo -n "fancy copy execute: "
+	@echo "fancy copy execute: "
 	@test/fancy_copy /tmp/oi_fancy_copy_src /tmp/oi_fancy_copy_dst && $(PASS) || $(FAIL)
-	md5sum /tmp/oi_fancy_copy*
 
 test/test_ping_pong_tcp_secure: test/ping_pong.c $(OUTPUT_A)
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=1
@@ -134,7 +135,7 @@ oi.3: oi.pod
 
 clean:
 	rm -f ${OBJ} $(OUTPUT_A) $(OUTPUT_LIB) $(NAME)-${VERSION}.tar.gz 
-	rm -f test/test_* test/fancy_copy
+	rm -rf test/test_* test/fancy_copy
 	rm -f oi.3
 
 install: $(OUTPUT_LIB) $(OUTPUT_A)
