@@ -9,7 +9,7 @@
 typedef struct oi_server  oi_server;
 typedef struct oi_socket  oi_socket;
 
-void oi_server_init               (oi_server *, int max_connections);
+void oi_server_init               (oi_server *, int backlog);
  int oi_server_listen             (oi_server *, struct addrinfo *addrinfo);
 void oi_server_attach             (oi_server *, struct ev_loop *loop);
 void oi_server_detach             (oi_server *);
@@ -32,7 +32,7 @@ void oi_socket_set_secure_session (oi_socket *, gnutls_session_t);
 struct oi_server {
   /* read only */
   int fd;
-  int max_connections;
+  int backlog;
   struct ev_loop *loop;
   unsigned listening:1;
 

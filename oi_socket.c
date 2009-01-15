@@ -563,7 +563,7 @@ oi_server_listen(oi_server *server, struct addrinfo *addrinfo)
     return -1;
   }
   
-  if (listen(fd, server->max_connections) < 0) {
+  if (listen(fd, server->backlog) < 0) {
     perror("listen()");
     close(fd);
     return -1;
@@ -606,9 +606,9 @@ oi_server_detach (oi_server *server)
 }
 
 void 
-oi_server_init(oi_server *server, int max_connections)
+oi_server_init(oi_server *server, int backlog)
 {
-  server->max_connections = max_connections;
+  server->backlog = backlog;
   server->listening = FALSE;
   server->fd = -1;
   server->connection_watcher.data = server;

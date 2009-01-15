@@ -181,9 +181,9 @@ Returning NULL from C<on_connection()> will reject the connection.
 
 =over 4
 
-=item void oi_server_init (oi_server *, int max_connections);
+=item void oi_server_init (oi_server *, int backlog);
 
-Initializes a server object. C<max_connections> is the argument given
+Initializes a server object. C<backlog> is the argument given
 internally to C<listen()>. Set the C<server.on_connection()> callback
 after calling this.
 
