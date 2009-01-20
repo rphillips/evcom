@@ -336,12 +336,6 @@ socket_send(oi_socket *socket)
 
   assert(socket->secure == FALSE);
 
-  if(!socket->connected) {
-    if(socket->on_connect) { socket->on_connect(socket); }
-    socket->connected = TRUE;
-    return OI_OKAY;
-  }
-
   if(oi_queue_empty(&socket->out_stream)) {
     ev_io_stop(socket->loop, &socket->write_watcher);
     return OI_AGAIN;
@@ -371,6 +365,7 @@ socket_send(oi_socket *socket)
       case EAGAIN:
         return OI_AGAIN;
 
+      case ECONNREFUSED:
       case ECONNRESET:
         socket->write_action = NULL;
         /* TODO maybe just clear write buffer instead of error? 
@@ -383,6 +378,12 @@ socket_send(oi_socket *socket)
         perror("send()");
         assert(0 && "oi shouldn't let this happen.");
     }
+  }
+
+  if(!socket->connected) {
+    if(socket->on_connect) { socket->on_connect(socket); }
+    socket->connected = TRUE;
+    return OI_OKAY;
   }
 
   oi_socket_reset_timeout(socket);
