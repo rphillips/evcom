@@ -60,6 +60,8 @@ Initialize a socket. C<timeout> is the number of seconds of inactivity that
 is allowed before the socket closes. The timeout only starts once the
 socket is attached to a loop and open.
 
+A C<timeout> argument of 0.0 signals that no timeout should be used.
+
 After calling this function, register your callbacks manually. Thus your
 code will probably look like this 
     oi_socket socket;
@@ -67,6 +69,7 @@ code will probably look like this
     socket.on_connect = my_on_connect;
     socket.on_read = my_on_read;
     /* etc */
+
 
 =item int oi_socket_connect (oi_socket *, struct addrinfo *addrinfo);
 

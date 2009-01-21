@@ -841,7 +841,8 @@ oi_socket_attach(oi_socket *socket, struct ev_loop *loop)
 {
   socket->loop = loop;
 
-  ev_timer_start(loop, &socket->timeout_watcher);
+  if(socket->timeout_watcher.at > 0)
+    ev_timer_start(loop, &socket->timeout_watcher);
 
   if(socket->read_action) 
     ev_io_start(loop, &socket->read_watcher);
