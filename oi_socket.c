@@ -822,6 +822,13 @@ oi_socket_write(oi_socket *socket, oi_buf *buf)
   ev_io_start(socket->loop, &socket->write_watcher);
 }
 
+static void
+free_simple_buf ( oi_buf *buf )
+{
+  free(buf->base);
+  free(buf);
+}
+
 /* Writes a string to the socket. 
  * NOTE: Allocates memory. Avoid for performance applications.
  */ 
@@ -829,7 +836,7 @@ void
 oi_socket_write_simple(oi_socket *socket, const char *str, size_t len)
 {
   oi_buf *buf = malloc(sizeof(oi_buf));
-  buf->release = (void (*)(oi_buf*))free;
+  buf->release = free_simple_buf;
   buf->base = strdup(str);
   buf->len = len;
 
