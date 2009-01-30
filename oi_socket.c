@@ -925,6 +925,6 @@ oi_socket_connect(oi_socket *s, struct addrinfo *addrinfo)
 
   assign_file_descriptor(s, fd);
 
-  return fd;
+  return 0;
 }
 

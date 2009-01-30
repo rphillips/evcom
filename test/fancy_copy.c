@@ -203,7 +203,7 @@ main(int argc, char *argv[])
   //client.on_close   = oi_socket_detach;
   client.on_drain   = on_client_drain;
   r = oi_socket_connect(&client, servinfo);
-  assert(r >= 0 && "problem connecting");
+  assert(r == 0 && "problem connecting");
   oi_socket_attach(&client, loop);
 
   oi_file_init(&file_src);

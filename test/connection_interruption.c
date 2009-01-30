@@ -134,7 +134,7 @@ main(int argc, const char *argv[])
     anon_tls_client(client);
 #endif
     r = oi_socket_connect(client, servinfo);
-    assert(r > 0 && "problem connecting");
+    assert(r == 0 && "problem connecting");
     oi_socket_attach(client, loop);
   }
 
