@@ -1,7 +1,9 @@
 #include <netdb.h>
 #include <ev.h>
 #include <gnutls/gnutls.h>
-#include <oi.h>
+#include <oi_queue.h>
+#include <oi_error.h>
+#include <oi_buf.h>
 
 #ifndef oi_socket_h
 #define oi_socket_h

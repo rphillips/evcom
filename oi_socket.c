@@ -9,7 +9,7 @@
 #include <netinet/tcp.h> /* TCP_NODELAY */
 
 #include <ev.h>
-#include <oi.h>
+#include <oi_socket.h>
 
 /* for now we will always include GNUTLS 
  * XXX make gnutls optional in the future? 
@@ -144,9 +144,9 @@ secure_handshake(oi_socket *socket)
 
   oi_socket_reset_timeout(socket);
 
+  socket->connected = TRUE;
   if(!socket->connected && socket->on_connect)
     socket->on_connect(socket);
-  socket->connected = TRUE;
 
   if(socket->read_action)
     socket->read_action = secure_socket_recv;
@@ -380,13 +380,13 @@ socket_send(oi_socket *socket)
     }
   }
 
+  oi_socket_reset_timeout(socket);
+
   if(!socket->connected) {
-    if(socket->on_connect) { socket->on_connect(socket); }
     socket->connected = TRUE;
-    return OI_OKAY;
+    if(socket->on_connect) { socket->on_connect(socket); }
   }
 
-  oi_socket_reset_timeout(socket);
   update_write_buffer_after_send(socket, sent);
 
   return OI_OKAY;
@@ -402,8 +402,8 @@ socket_recv(oi_socket *socket)
   assert(socket->secure == FALSE);
 
   if(!socket->connected) {
-    if(socket->on_connect) { socket->on_connect(socket); }
     socket->connected = TRUE;
+    if(socket->on_connect) { socket->on_connect(socket); }
     return OI_OKAY;
   }
 
