@@ -11,12 +11,6 @@
 #include <ev.h>
 #include <oi_socket.h>
 
-/* for now we will always include GNUTLS 
- * XXX make gnutls optional in the future? 
- */
-#undef HAVE_GNUTLS
-#define HAVE_GNUTLS 1
-
 #if HAVE_GNUTLS
 # include <gnutls/gnutls.h>
 # define GNUTLS_NEED_WRITE (gnutls_record_get_direction(socket->session) == 1)
@@ -748,6 +742,7 @@ oi_socket_init(oi_socket *socket, float timeout)
 void 
 oi_socket_write_eof (oi_socket *socket)
 {
+#if HAVE_GNUTLS
   /* try to hang up properly for secure connections */
   if(socket->secure) 
   {
@@ -764,6 +759,7 @@ oi_socket_write_eof (oi_socket *socket)
     full_close(socket); 
     return;
   }
+#endif // HAVE_GNUTLS
 
   if(socket->write_action)
     half_close(socket);
@@ -774,6 +770,7 @@ oi_socket_write_eof (oi_socket *socket)
 void 
 oi_socket_close (oi_socket *socket)
 {
+#if HAVE_GNUTLS
   /* try to hang up properly for secure connections */
   if( socket->secure 
    && socket->connected /* completed handshake */ 
@@ -793,6 +790,7 @@ oi_socket_close (oi_socket *socket)
 
     return;
   }
+#endif // HAVE_GNUTLS
 
   full_close(socket);
 }
