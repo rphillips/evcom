@@ -1,5 +1,9 @@
 #ifndef oi_queue_h
 #define oi_queue_h
+#ifdef __cplusplus
+extern "C" {
+#endif 
+
 /* Copyright (C) Igor Sysoev * from nginx ngx_queue.h */
 #include <stddef.h> /* offsetof() */
 typedef struct oi_queue oi_queue;
@@ -36,4 +40,7 @@ struct oi_queue {
 #define oi_queue_data(q, type, link)                                         \
     (type *) ((unsigned char *) q - offsetof(type, link))
 
+#ifdef __cplusplus
+}
+#endif 
 #endif // oi_queue_h

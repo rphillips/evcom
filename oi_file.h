@@ -1,5 +1,8 @@
 #include <oi.h>
 #include <ev.h>
+#ifdef __cplusplus
+extern "C" {
+#endif 
 
 #ifndef oi_file_h
 #define oi_file_h
@@ -49,4 +52,7 @@ struct oi_file {
   void *data;
 };
 
+#ifdef __cplusplus
+}
+#endif 
 #endif /*  oi_file_h */

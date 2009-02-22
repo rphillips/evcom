@@ -5,6 +5,9 @@
 
 #ifndef oi_async_h
 #define oi_async_h
+#ifdef __cplusplus
+extern "C" {
+#endif 
 
 typedef struct oi_async oi_async;
 typedef struct oi_task  oi_task;
@@ -192,4 +195,7 @@ oi_task_init_getaddrinfo(oi_task *t, oi_task_int_cb cb, const char *node,
   t->params.getaddrinfo.res = res;
 }
 
+#ifdef __cplusplus
+}
+#endif 
 #endif /* oi_async_h */

@@ -1,5 +1,8 @@
 #ifndef oi_error_h
 #define oi_error_h
+#ifdef __cplusplus
+extern "C" {
+#endif 
 
 struct oi_error {
   enum { OI_ERROR_GNUTLS
@@ -16,4 +19,7 @@ struct oi_error {
   int code; /* errno */
 };
 
+#ifdef __cplusplus
+}
+#endif 
 #endif // oi_error_h

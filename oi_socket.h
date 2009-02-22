@@ -6,6 +6,9 @@
 
 #ifndef oi_socket_h
 #define oi_socket_h
+#ifdef __cplusplus
+extern "C" {
+#endif 
 
 #ifndef HAVE_GNUTLS
 # define HAVE_GNUTLS 1
@@ -89,4 +92,7 @@ struct oi_socket {
   void *data;
 };
 
+#ifdef __cplusplus
+}
+#endif 
 #endif /* oi_socket_h */
