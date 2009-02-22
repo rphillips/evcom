@@ -17,4 +17,8 @@ struct oi_buf {
   oi_queue queue;
 };
 
+oi_buf * oi_buf_new     (const char* base, size_t len);
+oi_buf * oi_buf_new2    (size_t len);
+void     oi_buf_destroy (oi_buf *);
+
 #endif // oi_buf_h
