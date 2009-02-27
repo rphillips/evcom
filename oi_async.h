@@ -88,6 +88,13 @@ struct oi_task {
       oi_task_int_cb cb;
       int result;
     } getaddrinfo;
+
+    struct {
+      const char *path;
+      struct stat *buf;
+      oi_task_int_cb cb;
+      int result;
+    } lstat;
     
   } params;
 
@@ -118,6 +125,7 @@ enum { OI_TASK_OPEN
      , OI_TASK_SLEEP
      , OI_TASK_SENDFILE
      , OI_TASK_GETADDRINFO
+     , OI_TASK_LSTAT
      };
 
 #define oi_task_init_common(task, _type) do {\
@@ -193,6 +201,15 @@ oi_task_init_getaddrinfo(oi_task *t, oi_task_int_cb cb, const char *node,
   t->params.getaddrinfo.servname = service;
   t->params.getaddrinfo.hints = hints;
   t->params.getaddrinfo.res = res;
+}
+
+static inline void 
+oi_task_init_lstat(oi_task *t, oi_task_int_cb cb, const char *path, struct stat *buf) 
+{
+  oi_task_init_common(t, OI_TASK_LSTAT);
+  t->params.lstat.cb = cb;
+  t->params.lstat.path = path;
+  t->params.lstat.buf = buf;
 }
 
 #ifdef __cplusplus

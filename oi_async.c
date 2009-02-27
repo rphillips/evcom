@@ -220,6 +220,13 @@ queue_shift(pthread_mutex_t *lock, oi_queue *queue)
   break; \
 }
 
+#define P2(name,a,b) { \
+  t->params.name.result = name( t->params.name.a \
+                              , t->params.name.b \
+                              ); \
+  break; \
+}
+
 #define P3(name,a,b,c) { \
   t->params.name.result = name( t->params.name.a \
                               , t->params.name.b \
@@ -249,6 +256,7 @@ execute_task(oi_task *t)
     case OI_TASK_SLEEP:       P1(sleep, seconds);
     case OI_TASK_SENDFILE:    P4(eio__sendfile, out_fd, in_fd, offset, count);
     case OI_TASK_GETADDRINFO: P4(getaddrinfo, nodename, servname, hints, res);
+    case OI_TASK_LSTAT:       P2(lstat, path, buf);
     default: 
       assert(0 && "unknown task type");
       break;
@@ -397,6 +405,7 @@ on_completion(struct ev_loop *loop, ev_async *watcher, int revents)
       case OI_TASK_SLEEP: done_cb(sleep);
       case OI_TASK_SENDFILE: done_cb(eio__sendfile);
       case OI_TASK_GETADDRINFO: done_cb(getaddrinfo);
+      case OI_TASK_LSTAT: done_cb(lstat);
     }
     /* the task is possibly freed by callback. do not access it again. */
   }
