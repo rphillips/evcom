@@ -138,9 +138,11 @@ secure_handshake(oi_socket *socket)
 
   oi_socket_reset_timeout(socket);
 
-  socket->connected = TRUE;
-  if(!socket->connected && socket->on_connect)
-    socket->on_connect(socket);
+  if(!socket->connected) {
+    socket->connected = TRUE;
+    if(socket->on_connect)
+      socket->on_connect(socket);
+  }
 
   if(socket->read_action)
     socket->read_action = secure_socket_recv;
