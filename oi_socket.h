@@ -11,7 +11,7 @@ extern "C" {
 #endif 
 
 #ifndef HAVE_GNUTLS
-# define HAVE_GNUTLS 1
+# define HAVE_GNUTLS 0
 #endif
 #if HAVE_GNUTLS
 # include <gnutls/gnutls.h>
@@ -20,24 +20,24 @@ extern "C" {
 typedef struct oi_server  oi_server;
 typedef struct oi_socket  oi_socket;
 
-void oi_server_init               (oi_server *, int backlog);
- int oi_server_listen             (oi_server *, struct addrinfo *addrinfo);
-void oi_server_attach             (oi_server *, struct ev_loop *loop);
-void oi_server_detach             (oi_server *);
-void oi_server_close              (oi_server *); 
+void oi_server_init          (oi_server *, int backlog);
+ int oi_server_listen        (oi_server *, struct addrinfo *addrinfo);
+void oi_server_attach        (oi_server *, struct ev_loop *loop);
+void oi_server_detach        (oi_server *);
+void oi_server_close         (oi_server *); 
 
-void oi_socket_init               (oi_socket *, float timeout);
- int oi_socket_pair               (oi_socket *a, oi_socket *b); /* TODO */
- int oi_socket_connect            (oi_socket *, struct addrinfo *addrinfo);
-void oi_socket_attach             (oi_socket *, struct ev_loop *loop);
-void oi_socket_detach             (oi_socket *);
-void oi_socket_read_start         (oi_socket *);
-void oi_socket_read_stop          (oi_socket *);
-void oi_socket_reset_timeout      (oi_socket *);
-void oi_socket_write              (oi_socket *, oi_buf *);
-void oi_socket_write_simple       (oi_socket *, const char *str, size_t len);
-void oi_socket_write_eof          (oi_socket *);
-void oi_socket_close              (oi_socket *);
+void oi_socket_init          (oi_socket *, float timeout);
+ int oi_socket_pair          (oi_socket *a, oi_socket *b); /* TODO */
+ int oi_socket_connect       (oi_socket *, struct addrinfo *addrinfo);
+void oi_socket_attach        (oi_socket *, struct ev_loop *loop);
+void oi_socket_detach        (oi_socket *);
+void oi_socket_read_start    (oi_socket *);
+void oi_socket_read_stop     (oi_socket *);
+void oi_socket_reset_timeout (oi_socket *);
+void oi_socket_write         (oi_socket *, oi_buf *);
+void oi_socket_write_simple  (oi_socket *, const char *str, size_t len);
+void oi_socket_write_eof     (oi_socket *);
+void oi_socket_close         (oi_socket *);
 #if HAVE_GNUTLS
 void oi_socket_set_secure_session (oi_socket *, gnutls_session_t);
 #endif

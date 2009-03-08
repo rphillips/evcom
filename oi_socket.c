@@ -24,9 +24,9 @@
 #undef MIN
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
-#define OI_OKAY  0
-#define OI_AGAIN 1
-#define OI_ERROR 2 
+#define OKAY  0
+#define AGAIN 1
+#define ERROR 2 
 
 #define RAISE_ERROR(s, _domain, _code) do { \
   if(s->on_error) { \
@@ -42,7 +42,7 @@ full_close(oi_socket *socket)
 {
   if(-1 == close(socket->fd) && errno == EINTR) {
     /* TODO fd still open. next loop call close again? */
-    assert(0);  
+    assert(0 && "implement me");  
   }
 
   socket->read_action = NULL;
@@ -51,7 +51,7 @@ full_close(oi_socket *socket)
   if(socket->loop) {
     ev_feed_event(socket->loop, &socket->read_watcher, EV_READ);
   }
-  return OI_OKAY;
+  return OKAY;
 }
 
 static int 
@@ -61,13 +61,13 @@ half_close(oi_socket *socket)
 
   if(r == -1) {
     RAISE_ERROR(socket, OI_ERROR_SHUTDOWN, errno);
-    return OI_ERROR;
+    return ERROR;
   }
 
   socket->write_action = NULL;
 
   /* TODO set timer to zero  so we get a callback soon */
-  return OI_OKAY;
+  return OKAY;
 }
 
 static void
@@ -130,11 +130,11 @@ secure_handshake(oi_socket *socket)
 
   if(gnutls_error_is_fatal(r)) {
     RAISE_ERROR(socket, OI_ERROR_GNUTLS, r);
-    return OI_ERROR;
+    return ERROR;
   }
 
   if(r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN)
-    return OI_AGAIN;
+    return AGAIN;
 
   oi_socket_reset_timeout(socket);
 
@@ -148,7 +148,7 @@ secure_handshake(oi_socket *socket)
   if(socket->write_action)
     socket->write_action = secure_socket_send;
 
-  return OI_OKAY;
+  return OKAY;
 }
 
 static int
@@ -158,7 +158,7 @@ secure_socket_send(oi_socket *socket)
 
   if(oi_queue_empty(&socket->out_stream)) {
     ev_io_stop(socket->loop, &socket->write_watcher);
-    return OI_AGAIN;
+    return AGAIN;
   }
 
   oi_queue *q = oi_queue_last(&socket->out_stream);
@@ -173,11 +173,11 @@ secure_socket_send(oi_socket *socket)
 
   if(gnutls_error_is_fatal(sent)) {
     RAISE_ERROR(socket, OI_ERROR_GNUTLS, sent);
-    return OI_ERROR;
+    return ERROR;
   }
 
   if(sent == 0)
-    return OI_AGAIN;
+    return AGAIN;
 
   oi_socket_reset_timeout(socket);
 
@@ -188,10 +188,10 @@ secure_socket_send(oi_socket *socket)
       } else {
         /* TODO GnuTLS needs read but already got EOF */
         assert(0 && "needs read but already got EOF");
-        return OI_ERROR;
+        return ERROR;
       }
     }
-    return OI_AGAIN;
+    return AGAIN;
   }
 
   if(sent > 0) {
@@ -199,11 +199,11 @@ secure_socket_send(oi_socket *socket)
     if(socket->read_action)
       socket->read_action = secure_socket_recv;
     update_write_buffer_after_send(socket, sent);
-    return OI_OKAY;
+    return OKAY;
   }
 
   assert(0 && "Unhandled return code from gnutls_record_send()!");
-  return OI_ERROR;
+  return ERROR;
 }
 
 static int
@@ -219,7 +219,7 @@ secure_socket_recv(oi_socket *socket)
 
   if(gnutls_error_is_fatal(recved)) {
     RAISE_ERROR(socket, OI_ERROR_GNUTLS, recved);
-    return OI_ERROR;
+    return ERROR;
   }
 
   if(recved == GNUTLS_E_INTERRUPTED || recved == GNUTLS_E_AGAIN)  {
@@ -229,10 +229,10 @@ secure_socket_recv(oi_socket *socket)
       } else {
         /* TODO GnuTLS needs send but already closed write end */
         assert(0 && "needs read but cannot");
-        return OI_ERROR;
+        return ERROR;
       }
     }
-    return OI_AGAIN;
+    return AGAIN;
   }
 
   oi_socket_reset_timeout(socket);
@@ -244,11 +244,11 @@ secure_socket_recv(oi_socket *socket)
     if(socket->write_action) {
       socket->read_action = secure_handshake;
       socket->write_action = secure_handshake;
-      return OI_OKAY;
+      return OKAY;
     } else {
       /* TODO */
       assert(0 && "needs read but cannot");
-      return OI_ERROR;
+      return ERROR;
     }
   }
 
@@ -262,11 +262,11 @@ secure_socket_recv(oi_socket *socket)
 
     if(socket->on_read) { socket->on_read(socket, recv_buffer, recved); }
 
-    return OI_OKAY;
+    return OKAY;
   }
 
   assert(0 && "Unhandled return code from gnutls_record_send()!");
-  return OI_ERROR;
+  return ERROR;
 }
 
 static int
@@ -278,20 +278,20 @@ secure_goodbye(oi_socket *socket, gnutls_close_request_t how)
 
   if(gnutls_error_is_fatal(r))  {
     RAISE_ERROR(socket, OI_ERROR_GNUTLS, r);
-    return OI_ERROR;
+    return ERROR;
   }
 
   if(r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN)
-    return OI_AGAIN;
+    return AGAIN;
 
-  return OI_OKAY;
+  return OKAY;
 }
 
 static int
 secure_full_goodbye(oi_socket *socket)
 {
   int r = secure_goodbye(socket, GNUTLS_SHUT_RDWR);
-  if(OI_OKAY == r) {
+  if(OKAY == r) {
     return full_close(socket);
   }
   return r;
@@ -301,7 +301,7 @@ static int
 secure_half_goodbye(oi_socket *socket)
 {
   int r = secure_goodbye(socket, GNUTLS_SHUT_WR);
-  if(OI_OKAY == r) {
+  if(OKAY == r) {
     return half_close(socket);
   }
   return r;
@@ -332,7 +332,7 @@ socket_send(oi_socket *socket)
 
   if(oi_queue_empty(&socket->out_stream)) {
     ev_io_stop(socket->loop, &socket->write_watcher);
-    return OI_AGAIN;
+    return AGAIN;
   }
 
   oi_queue *q = oi_queue_last(&socket->out_stream);
@@ -357,7 +357,7 @@ socket_send(oi_socket *socket)
   if(sent < 0) {
     switch(errno) {
       case EAGAIN:
-        return OI_AGAIN;
+        return AGAIN;
 
       case ECONNREFUSED:
       case ECONNRESET:
@@ -366,7 +366,7 @@ socket_send(oi_socket *socket)
          * They should be able to read still from the socket. 
          */
         RAISE_ERROR(socket, OI_ERROR_SEND, errno);
-        return OI_ERROR;
+        return ERROR;
 
       default:
         perror("send()");
@@ -383,7 +383,7 @@ socket_send(oi_socket *socket)
 
   update_write_buffer_after_send(socket, sent);
 
-  return OI_OKAY;
+  return OKAY;
 }
 
 static int
@@ -398,7 +398,7 @@ socket_recv(oi_socket *socket)
   if(!socket->connected) {
     socket->connected = TRUE;
     if(socket->on_connect) { socket->on_connect(socket); }
-    return OI_OKAY;
+    return OKAY;
   }
 
   recved = recv(socket->fd, buf, buf_size, 0);
@@ -407,17 +407,17 @@ socket_recv(oi_socket *socket)
     switch(errno) {
       case EAGAIN: 
       case EINTR:  
-        return OI_AGAIN;
+        return AGAIN;
 
       /* A remote host refused to allow the network connection (typically
        * because it is not running the requested service). */
       case ECONNREFUSED:
         RAISE_ERROR(socket, OI_ERROR_RECV, errno);
-        return OI_ERROR; 
+        return ERROR; 
 
       case ECONNRESET:
         RAISE_ERROR(socket, OI_ERROR_RECV, errno);
-        return OI_ERROR; 
+        return ERROR; 
 
       default:
         perror("recv()");
@@ -436,7 +436,7 @@ socket_recv(oi_socket *socket)
   /* NOTE: EOF is signaled with recved == 0 on callback */
   if(socket->on_read) { socket->on_read(socket, buf, recved); }
 
-  return OI_OKAY;
+  return OKAY;
 }
 
 static void
@@ -661,16 +661,16 @@ on_io_event(struct ev_loop *loop, ev_io *watcher, int revents)
 
     if(socket->read_action) {
       r = socket->read_action(socket);
-      if(r == OI_ERROR) goto close;
-      if(r == OI_AGAIN) have_read_event = FALSE;
+      if(r == ERROR) goto close;
+      if(r == AGAIN) have_read_event = FALSE;
     } else {
       have_read_event = FALSE;
     }
 
     if(socket->write_action) {
       r = socket->write_action(socket);
-      if(r == OI_ERROR) goto close;
-      if(r == OI_AGAIN) have_write_event = FALSE;
+      if(r == ERROR) goto close;
+      if(r == AGAIN) have_write_event = FALSE;
     } else {
       have_write_event = FALSE;
     }
@@ -689,7 +689,13 @@ on_io_event(struct ev_loop *loop, ev_io *watcher, int revents)
 
 close:
   release_write_buffer(socket);
+
+  ev_clear_pending (socket->loop, &socket->write_watcher);
+  ev_clear_pending (socket->loop, &socket->read_watcher);
+  ev_clear_pending (socket->loop, &socket->timeout_watcher);
+
   oi_socket_detach(socket);
+
   if(socket->on_close) { socket->on_close(socket); }
   /* WARNING: user can free socket in on_close so no more 
    * access beyond this point. */

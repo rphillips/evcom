@@ -24,8 +24,10 @@ static void
 on_peer_close(oi_socket *socket)
 {
   //printf("server connection closed\n");
+#if HAVE_GNUTLS
 #if SECURE
   gnutls_deinit(socket->session);
+#endif
 #endif
   free(socket);
 }
@@ -51,6 +53,8 @@ on_client_error(oi_socket *socket, struct oi_error e)
 }
 
 
+#if HAVE_GNUTLS
+#if SECURE
 #define DH_BITS 768
 gnutls_anon_server_credentials_t server_credentials;
 const int kx_prio[] = { GNUTLS_KX_ANON_DH, 0 };
@@ -102,3 +106,5 @@ void anon_tls_client(oi_socket *socket)
   assert(socket->secure);
 }
 
+#endif // SECURE
+#endif // HAVE_GNUTLS

@@ -36,9 +36,11 @@ on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
   socket->on_close   = on_peer_close;
   socket->on_timeout = on_peer_timeout;
 
+#if HAVE_GNUTLS
 # if SECURE
   anon_tls_server(socket);
 # endif
+#endif
 
   //printf("on server connection\n");
 
@@ -85,9 +87,11 @@ main(int argc, const char *argv[])
 
   oi_server_init(&server, 1000);
   server.on_connection = on_server_connection;
+#if HAVE_GNUTLS
 # if SECURE
   anon_tls_init();
 # endif
+#endif
 
   struct addrinfo *servinfo;
   struct addrinfo hints;
@@ -130,8 +134,10 @@ main(int argc, const char *argv[])
     client->on_connect = on_client_connect;
     client->on_close   = on_client_close;
     client->on_timeout = on_client_timeout;
+#if HAVE_GNUTLS
 #if SECURE
     anon_tls_client(client);
+#endif
 #endif
     r = oi_socket_connect(client, servinfo);
     assert(r == 0 && "problem connecting");

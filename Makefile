@@ -36,7 +36,7 @@ endif
 LDFLAGS += -lev
 
 ifdef GNUTLSDIR
-	CFLAGS += -I$(GNUTLSDIR)/include
+	CFLAGS += -I$(GNUTLSDIR)/include -DHAVE_GNUTLS=1
 	LDFLAGS += -L$(GNUTLSDIR)/lib
 endif
 LDFLAGS += -lgnutls
@@ -53,8 +53,8 @@ else
 	CFLAGS += -DHAVE_SENDFILE=1
 endif
 
-DEP = oi_socket.h oi_async.h oi_file.h
-SRC = oi_socket.c oi_async.c oi_file.c
+DEP = oi_socket.h oi_async.h oi_file.h oi_buf.h oi_error.h oi_queue.h
+SRC = oi_socket.c oi_async.c oi_file.c oi_buf.c
 OBJ = ${SRC:.c=.o}
 
 VERSION = 0.1
