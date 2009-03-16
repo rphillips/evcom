@@ -15,7 +15,7 @@ on_peer_read(oi_socket *socket, const void *base, size_t len)
   char buf[2000];
   strncpy(buf, base, len);
   buf[len] = 0;
-  //printf("server got message: %s\n", buf);
+  printf("server got message: %s\n", buf);
 
   oi_socket_write_simple(socket, PONG, sizeof PONG);
 }
@@ -29,7 +29,7 @@ on_peer_error(oi_socket *socket, struct oi_error e)
 static void 
 on_client_close(oi_socket *socket)
 {
-  //printf("client connection closed\n");
+  printf("client connection closed\n");
   ev_unloop(socket->loop, EVUNLOOP_ALL);
 }
 
@@ -51,7 +51,7 @@ on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
 # endif
 #endif
 
-  //printf("on server connection\n");
+  printf("on server connection\n");
 
   return socket;
 }
@@ -59,7 +59,7 @@ on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
 static void 
 on_client_connect(oi_socket *socket)
 {
-  //printf("client connected. sending ping\n");
+  printf("client connected. sending ping\n");
   oi_socket_write_simple(socket, PING, sizeof PING);
 }
 
@@ -69,7 +69,7 @@ on_client_read(oi_socket *socket, const void *base, size_t len)
   char buf[200000];
   strncpy(buf, base, len);
   buf[len] = 0;
-  //printf("client got message: %s\n", buf);
+  printf("client got message: %s\n", buf);
   
   if(strcmp(buf, PONG) == 0) {
 
@@ -91,8 +91,8 @@ main(int argc, const char *argv[])
   oi_server server;
   oi_socket client;
 
-  //printf("sizeof(oi_server): %d\n", sizeof(oi_server));
-  //printf("sizeof(oi_socket): %d\n", sizeof(oi_socket));
+  printf("sizeof(oi_server): %d\n", sizeof(oi_server));
+  printf("sizeof(oi_socket): %d\n", sizeof(oi_socket));
 
   oi_server_init(&server, 10);
   server.on_connection = on_server_connection;

@@ -4,7 +4,7 @@ EVDIR=$(HOME)/local/libev
 
 # Define GNUTLSDIR=/foo/bar if your gnutls header and library files are in
 # /foo/bar/include and /foo/bar/lib directories.
-GNUTLSDIR=/usr
+#GNUTLSDIR=/usr
 #
 #
 # Define NO_PREAD if you have a problem with pread() system call (e.g.

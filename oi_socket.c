@@ -43,6 +43,7 @@ full_close(oi_socket *socket)
   if(-1 == close(socket->fd) && errno == EINTR) {
     /* TODO fd still open. next loop call close again? */
     assert(0 && "implement me");  
+    return ERROR;
   }
 
   socket->read_action = NULL;
@@ -219,6 +220,8 @@ secure_socket_recv(oi_socket *socket)
 
   recved = gnutls_record_recv(socket->session, recv_buffer, recv_buffer_size);
 
+  //printf("secure socket recv %d %p\n", recved, socket->on_connect);
+
   if(gnutls_error_is_fatal(recved)) {
     RAISE_ERROR(socket, OI_ERROR_GNUTLS, recved);
     return ERROR;
@@ -227,6 +230,7 @@ secure_socket_recv(oi_socket *socket)
   if(recved == GNUTLS_E_INTERRUPTED || recved == GNUTLS_E_AGAIN)  {
     if(GNUTLS_NEED_WRITE) {
       if(socket->write_action) {
+        printf("need write\n");
         socket->write_action = secure_socket_recv;
       } else {
         /* TODO GnuTLS needs send but already closed write end */
@@ -373,6 +377,7 @@ socket_send(oi_socket *socket)
       default:
         perror("send()");
         assert(0 && "oi shouldn't let this happen.");
+        return ERROR;
     }
   }
 
@@ -425,6 +430,7 @@ socket_recv(oi_socket *socket)
         perror("recv()");
         printf("unmatched errno %d\n", errno);
         assert(0 && "recv returned error that oi should have caught before.");
+        return ERROR;
     }
   }
 
