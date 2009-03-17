@@ -9,7 +9,7 @@ on_peer_read(oi_socket *socket, const void *base, size_t len)
 {
   assert(len == 0);
   oi_socket_write_simple(socket, "BYE", 3);
-  printf("server wrote bye\n");
+  //printf("server wrote bye\n");
 }
 
 static void 
@@ -42,7 +42,7 @@ on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
 # endif
 #endif
 
-  printf("on server connection\n");
+  //printf("on server connection\n");
 
   return socket;
 }
@@ -50,17 +50,19 @@ on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
 static void 
 on_client_connect(oi_socket *socket)
 {
-  printf("on client connection\n");
+  //printf("on client connection\n");
   oi_socket_write_eof(socket);
 }
 
 static void 
 on_client_close(oi_socket *socket)
 {
-  printf("client connection closed\n");
+  oi_socket_close(socket); // already closed, but it shouldn't crash if we try to do it again
+
+  //printf("client connection closed\n");
   if(++nconnections == NCONN) {
     oi_server_detach(&server);
-    printf("detaching server\n");
+    //printf("detaching server\n");
   }
 }
 
@@ -71,7 +73,7 @@ on_client_read(oi_socket *socket, const void *base, size_t len)
   strncpy(buf, base, len);
   buf[len] = 0;
 
-  printf("client got message: %s\n", buf);
+  //printf("client got message: %s\n", buf);
   
   if(strcmp(buf, "BYE") == 0) {
     oi_socket_close(socket);
