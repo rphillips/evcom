@@ -64,7 +64,7 @@ OUTPUT_A=$(NAME).a
 
 LINKER=$(CC) $(LDOPT)
 
-TESTS = test/test_ping_pong_tcp_secure test/test_ping_pong_unix_secure test/test_ping_pong_tcp_clear test/test_ping_pong_unix_clear test/test_connection_interruption_tcp_secure test/test_connection_interruption_unix_secure test/test_connection_interruption_tcp_clear test/test_connection_interruption_unix_clear test/test_stdout test/test_sleeping_tasks test/fancy_copy
+TESTS = test/test_ping_pong_tcp_secure test/test_ping_pong_unix_secure test/test_ping_pong_tcp_clear test/test_ping_pong_unix_clear test/test_connection_interruption_tcp_secure test/test_connection_interruption_unix_secure test/test_connection_interruption_tcp_clear test/test_connection_interruption_unix_clear test/test_stdout test/test_sleeping_tasks test/fancy_copy test/echo
 
 all: $(OUTPUT_LIB) $(OUTPUT_A) $(TESTS)
 
@@ -95,6 +95,8 @@ test: $(TESTS) /tmp/oi_fancy_copy_src
 	done 
 	@echo "fancy copy execute: "
 	@test/fancy_copy /tmp/oi_fancy_copy_src /tmp/oi_fancy_copy_dst && $(PASS) || $(FAIL)
+	@echo "timeouts: "
+	@test/timeout.rb
 
 test/test_ping_pong_tcp_secure: test/ping_pong.c $(OUTPUT_A)
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=1
@@ -129,13 +131,16 @@ test/test_sleeping_tasks: test/sleeping_tasks.c $(OUTPUT_A)
 test/fancy_copy: test/fancy_copy.c $(OUTPUT_A)
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
 
+test/echo: test/echo.c $(OUTPUT_A)
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=0
+
 doc: oi.3
 oi.3: oi.pod
 	pod2man -s 3 -c "liboi - evented I/O" oi.pod > oi.3
 
 clean:
 	rm -f ${OBJ} $(OUTPUT_A) $(OUTPUT_LIB) $(NAME)-${VERSION}.tar.gz 
-	rm -rf test/test_* test/fancy_copy
+	rm -rf test/test_* test/fancy_copy test/echo
 	rm -f oi.3
 
 install: $(OUTPUT_LIB) $(OUTPUT_A)

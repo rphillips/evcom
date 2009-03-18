@@ -739,7 +739,7 @@ oi_socket_init(oi_socket *socket, float timeout)
 #endif 
 
   /* TODO higher resolution timer */
-  ev_timer_init(&socket->timeout_watcher, on_timeout, timeout, 0.);
+  ev_timer_init(&socket->timeout_watcher, on_timeout, 0., timeout);
   socket->timeout_watcher.data = socket;  
 
   socket->read_action = NULL;
@@ -860,8 +860,7 @@ oi_socket_attach(oi_socket *socket, struct ev_loop *loop)
 {
   socket->loop = loop;
 
-  if(socket->timeout_watcher.at > 0)
-    ev_timer_start(loop, &socket->timeout_watcher);
+  ev_timer_again(loop, &socket->timeout_watcher);
 
   if(socket->read_action) 
     ev_io_start(loop, &socket->read_watcher);
