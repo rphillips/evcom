@@ -41,20 +41,8 @@ ifdef GNUTLSDIR
 endif
 LDFLAGS += -lgnutls
 
-ifdef NO_PREAD
-	CFLAGS += -DHAVE_PREADWRITE=0
-else
-	CFLAGS += -DHAVE_PREADWRITE=1
-endif
-
-ifdef NO_SENDFILE
-	CFLAGS += -DHAVE_SENDFILE=0
-else
-	CFLAGS += -DHAVE_SENDFILE=1
-endif
-
-DEP = oi_socket.h oi_async.h oi_file.h oi_buf.h oi_error.h oi_queue.h
-SRC = oi_socket.c oi_async.c oi_file.c oi_buf.c
+DEP = oi_socket.h oi_buf.h oi_error.h oi_queue.h
+SRC = oi_socket.c oi_buf.c
 OBJ = ${SRC:.c=.o}
 
 VERSION = 0.1
@@ -64,7 +52,7 @@ OUTPUT_A=$(NAME).a
 
 LINKER=$(CC) $(LDOPT)
 
-TESTS = test/test_ping_pong_tcp_secure test/test_ping_pong_unix_secure test/test_ping_pong_tcp_clear test/test_ping_pong_unix_clear test/test_connection_interruption_tcp_secure test/test_connection_interruption_unix_secure test/test_connection_interruption_tcp_clear test/test_connection_interruption_unix_clear test/test_stdout test/test_sleeping_tasks test/fancy_copy test/echo
+TESTS = test/test_ping_pong_tcp_secure test/test_ping_pong_unix_secure test/test_ping_pong_tcp_clear test/test_ping_pong_unix_clear test/test_connection_interruption_tcp_secure test/test_connection_interruption_unix_secure test/test_connection_interruption_tcp_clear test/test_connection_interruption_unix_clear test/echo
 
 all: $(OUTPUT_LIB) $(OUTPUT_A) $(TESTS)
 
@@ -93,8 +81,6 @@ test: $(TESTS) /tmp/oi_fancy_copy_src
 			$$i && $(PASS) || $(FAIL); \
 		fi \
 	done 
-	@echo "fancy copy execute: "
-	@test/fancy_copy /tmp/oi_fancy_copy_src /tmp/oi_fancy_copy_dst && $(PASS) || $(FAIL)
 	@echo "timeouts: "
 	@test/timeout.rb
 
@@ -121,15 +107,6 @@ test/test_connection_interruption_tcp_clear: test/connection_interruption.c $(OU
 
 test/test_connection_interruption_unix_clear: test/connection_interruption.c $(OUTPUT_A)
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0 -DSECURE=0
-
-test/test_stdout: test/stdout.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
-
-test/test_sleeping_tasks: test/sleeping_tasks.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
-
-test/fancy_copy: test/fancy_copy.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
 
 test/echo: test/echo.c $(OUTPUT_A)
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=0
