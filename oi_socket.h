@@ -49,6 +49,7 @@ struct oi_server {
 #if EV_MULTIPLICITY
   struct ev_loop *loop;
 #endif
+  unsigned attached:1;
   unsigned listening:1;
 
   /* private */
@@ -69,6 +70,7 @@ struct oi_socket {
   oi_server *server;
   oi_queue out_stream;
   size_t written;
+  unsigned attached:1;
   unsigned connected:1;
   unsigned secure:1;
   unsigned wait_for_secure_hangup:1;
