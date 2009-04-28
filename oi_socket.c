@@ -11,6 +11,12 @@
 #include <ev.h>
 #include <oi_socket.h>
 
+#if EV_MULTIPLICITY
+# define OI_A_(x) (x)->loop,
+#else
+# define OI_A_(x)
+#endif
+
 #if HAVE_GNUTLS
 # include <gnutls/gnutls.h>
 # define GNUTLS_NEED_WRITE (gnutls_record_get_direction(socket->session) == 1)
@@ -49,9 +55,7 @@ full_close(oi_socket *socket)
   socket->read_action = NULL;
   socket->write_action = NULL;
 
-  if(socket->loop) {
-    ev_feed_event(socket->loop, &socket->read_watcher, EV_READ);
-  }
+  ev_feed_event(OI_A_(socket) &socket->read_watcher, EV_READ);
   return OKAY;
 }
 
@@ -88,7 +92,7 @@ update_write_buffer_after_send(oi_socket *socket, ssize_t sent)
     }  
 
     if(oi_queue_empty(&socket->out_stream)) {
-      ev_io_stop(socket->loop, &socket->write_watcher);
+      ev_io_stop(OI_A_(socket) &socket->write_watcher);
       if(socket->on_drain)
         socket->on_drain(socket);
     }
@@ -160,7 +164,7 @@ secure_socket_send(oi_socket *socket)
   ssize_t sent;
 
   if(oi_queue_empty(&socket->out_stream)) {
-    ev_io_stop(socket->loop, &socket->write_watcher);
+    ev_io_stop(OI_A_(socket) &socket->write_watcher);
     return AGAIN;
   }
 
@@ -337,7 +341,7 @@ socket_send(oi_socket *socket)
   assert(socket->secure == FALSE);
 
   if(oi_queue_empty(&socket->out_stream)) {
-    ev_io_stop(socket->loop, &socket->write_watcher);
+    ev_io_stop(OI_A_(socket) &socket->write_watcher);
     return AGAIN;
   }
 
@@ -477,14 +481,16 @@ assign_file_descriptor(oi_socket *socket, int fd)
  * Called by server->connection_watcher.
  */
 static void 
-on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
+on_connection(EV_P_ ev_io *watcher, int revents)
 {
   oi_server *server = watcher->data;
 
  // printf("on connection!\n");
 
   assert(server->listening);
+#if EV_MULTIPLICITY
   assert(server->loop == loop);
+#endif
   assert(&server->connection_watcher == watcher);
   
   if(EV_ERROR & revents) {
@@ -524,7 +530,7 @@ on_connection(struct ev_loop *loop, ev_io *watcher, int revents)
 
   socket->server = server;
   assign_file_descriptor(socket, fd);
-  oi_socket_attach(socket, loop);
+  oi_socket_attach(EV_A_ socket);
 }
 
 int
@@ -595,17 +601,21 @@ oi_server_close(oi_server *server)
 }
 
 void
-oi_server_attach (oi_server *server, struct ev_loop *loop)
+oi_server_attach (EV_P_ oi_server *server)
 {
-  ev_io_start (loop, &server->connection_watcher);
+  ev_io_start (EV_A_ &server->connection_watcher);
+#if EV_MULTIPLICITY
   server->loop = loop;
+#endif 
 }
 
 void
 oi_server_detach (oi_server *server)
 {
-  ev_io_stop (server->loop, &server->connection_watcher);
+  ev_io_stop (OI_A_(server) &server->connection_watcher);
+#if EV_MULTIPLICITY
   server->loop = NULL;
+#endif 
 }
 
 void 
@@ -624,7 +634,7 @@ oi_server_init(oi_server *server, int backlog)
 
 /* Internal callback. called by socket->timeout_watcher */
 static void 
-on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
+on_timeout(EV_P_ ev_timer *watcher, int revents)
 {
   oi_socket *socket = watcher->data;
 
@@ -633,7 +643,6 @@ on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
  // printf("on_timeout\n");
 
   if(socket->on_timeout) { socket->on_timeout(socket); }
-
 
   /* TODD set timer to zero */
   full_close(socket);
@@ -652,7 +661,7 @@ release_write_buffer(oi_socket *socket)
 
 /* Internal callback. called by socket->read_watcher */
 static void 
-on_io_event(struct ev_loop *loop, ev_io *watcher, int revents)
+on_io_event(EV_P_ ev_io *watcher, int revents)
 {
   oi_socket *socket = watcher->data;
 
@@ -698,9 +707,9 @@ on_io_event(struct ev_loop *loop, ev_io *watcher, int revents)
 close:
   release_write_buffer(socket);
 
-  ev_clear_pending (socket->loop, &socket->write_watcher);
-  ev_clear_pending (socket->loop, &socket->read_watcher);
-  ev_clear_pending (socket->loop, &socket->timeout_watcher);
+  ev_clear_pending (EV_A_ &socket->write_watcher);
+  ev_clear_pending (EV_A_ &socket->read_watcher);
+  ev_clear_pending (EV_A_ &socket->timeout_watcher);
 
   oi_socket_detach(socket);
 
@@ -721,7 +730,9 @@ oi_socket_init(oi_socket *socket, float timeout)
 {
   socket->fd = -1;
   socket->server = NULL;
+#if EV_MULTIPLICITY
   socket->loop = NULL;
+#endif
   socket->connected = FALSE;
 
   oi_queue_init(&socket->out_stream);
@@ -765,8 +776,7 @@ oi_socket_write_eof (oi_socket *socket)
       ) 
     {
       socket->write_action = secure_half_goodbye;
-      if(socket->loop)
-        ev_io_start(socket->loop, &socket->write_watcher);
+      ev_io_start(OI_A_(socket) &socket->write_watcher);
       return;
     }
     /* secure servers cannot handle half-closed connections? */
@@ -799,8 +809,7 @@ oi_socket_close (oi_socket *socket)
       socket->read_action = NULL;
     }
 
-    if(socket->loop)
-      ev_io_start(socket->loop, &socket->write_watcher);
+    ev_io_start(OI_A_(socket) &socket->write_watcher);
 
     return;
   }
@@ -815,7 +824,7 @@ oi_socket_close (oi_socket *socket)
 void 
 oi_socket_reset_timeout(oi_socket *socket)
 {
-  ev_timer_again(socket->loop, &socket->timeout_watcher);
+  ev_timer_again(OI_A_(socket) &socket->timeout_watcher);
 }
 
 /**
@@ -831,7 +840,7 @@ oi_socket_write(oi_socket *socket, oi_buf *buf)
   oi_queue_insert_head(&socket->out_stream, &buf->queue);
 
   buf->written = 0;
-  ev_io_start(socket->loop, &socket->write_watcher);
+  ev_io_start(OI_A_(socket) &socket->write_watcher);
 }
 
 static void
@@ -856,45 +865,47 @@ oi_socket_write_simple(oi_socket *socket, const char *str, size_t len)
 }
 
 void
-oi_socket_attach(oi_socket *socket, struct ev_loop *loop)
+oi_socket_attach(EV_P_ oi_socket *socket)
 {
+#if EV_MULTIPLICITY
   socket->loop = loop;
+#endif 
 
-  ev_timer_again(loop, &socket->timeout_watcher);
+  ev_timer_again(EV_A_ &socket->timeout_watcher);
 
   if(socket->read_action) 
-    ev_io_start(loop, &socket->read_watcher);
+    ev_io_start(EV_A_ &socket->read_watcher);
 
   if(socket->write_action) 
-    ev_io_start(loop, &socket->write_watcher);
+    ev_io_start(EV_A_ &socket->write_watcher);
 
   /* make sure the io_event happens soon  in the case we're being reattached */
-  ev_feed_event(loop, &socket->read_watcher, EV_READ);
+  ev_feed_event(EV_A_ &socket->read_watcher, EV_READ);
 }
 
 void
 oi_socket_detach(oi_socket *socket)
 {
-  if(socket->loop) {
-    ev_io_stop(socket->loop, &socket->write_watcher);
-    ev_io_stop(socket->loop, &socket->read_watcher);
-    ev_timer_stop(socket->loop, &socket->timeout_watcher);
-    socket->loop = NULL;
-  }
+  ev_io_stop(OI_A_(socket) &socket->write_watcher);
+  ev_io_stop(OI_A_(socket) &socket->read_watcher);
+  ev_timer_stop(OI_A_(socket) &socket->timeout_watcher);
+#if EV_MULTIPLICITY
+  socket->loop = NULL;
+#endif
 }
 
 void
 oi_socket_read_stop (oi_socket *socket)
 {
-  ev_io_stop(socket->loop, &socket->read_watcher);
-  ev_clear_pending (socket->loop, &socket->read_watcher);
+  ev_io_stop(OI_A_(socket) &socket->read_watcher);
+  ev_clear_pending (OI_A_(socket) &socket->read_watcher);
 }
 
 void
 oi_socket_read_start (oi_socket *socket)
 {
   if(socket->read_action) {
-    ev_io_start(socket->loop, &socket->read_watcher);
+    ev_io_start(OI_A_(socket) &socket->read_watcher);
     /* XXX feed event? */
   }
 }
