@@ -1,7 +1,32 @@
+/* Copyright (c) 2008,2009 Ryan Dahl
+ *
+ * oi_queue comes from ngx_queue.h 
+ * Copyright (C) 2002-2009 Igor Sysoev
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
 #include <netdb.h>
 #include <ev.h>
-#include <oi_queue.h>
-#include <oi_buf.h>
+#include <stddef.h> /* offsetof() */
 
 #ifndef oi_socket_h
 #define oi_socket_h
@@ -15,9 +40,47 @@ extern "C" {
 #if HAVE_GNUTLS
 # include <gnutls/gnutls.h>
 #endif
+typedef struct oi_queue oi_queue;
+struct oi_queue {
+    oi_queue  *prev;
+    oi_queue  *next;
+};
 
+#define oi_queue_init(q)            \
+    (q)->prev = q;                  \
+    (q)->next = q
+
+#define oi_queue_empty(h)           \
+    (h == (h)->prev)
+
+#define oi_queue_insert_head(h, x)  \
+    (x)->next = (h)->next;          \
+    (x)->next->prev = x;            \
+    (x)->prev = h;                  \
+    (h)->next = x
+
+#define oi_queue_head(h)            \
+    (h)->next
+
+#define oi_queue_last(h)            \
+    (h)->prev
+
+#define oi_queue_remove(x)          \
+    (x)->next->prev = (x)->prev;    \
+    (x)->prev->next = (x)->next;    \
+    (x)->prev = NULL;               \
+    (x)->next = NULL
+
+#define oi_queue_data(q, type, link) \
+    (type *) ((unsigned char *) q - offsetof(type, link))
+
+typedef struct oi_buf oi_buf;
 typedef struct oi_server  oi_server;
 typedef struct oi_socket  oi_socket;
+
+oi_buf * oi_buf_new     (const char* base, size_t len);
+oi_buf * oi_buf_new2    (size_t len);
+void     oi_buf_destroy (oi_buf *);
 
 void oi_server_init          (oi_server *, int backlog);
  int oi_server_listen        (oi_server *, struct addrinfo *addrinfo);
@@ -72,6 +135,18 @@ void oi_socket_force_close (oi_socket *);
  */
 void oi_socket_set_secure_session (oi_socket *, gnutls_session_t);
 #endif
+
+struct oi_buf {
+  /* public */
+  char *base;
+  size_t len;
+  void (*release) (oi_buf *); /* called when oi is done with the object */
+  void *data;
+
+  /* private */
+  size_t written;
+  oi_queue queue;
+};
 
 struct oi_server {
   /* read only */
