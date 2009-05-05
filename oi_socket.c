@@ -113,6 +113,7 @@ full_close(oi_socket *socket)
 
   socket->read_action = NULL;
   socket->write_action = NULL;
+  socket->fd = -1;
   return OKAY;
 }
 
@@ -121,10 +122,17 @@ half_close(oi_socket *socket)
 {
   int r = shutdown(socket->fd, SHUT_WR);
   if (r == -1) {
-    socket->errorno = errno;
-    perror("shutdown()");
-    assert(0 && "Shouldn't get an error on shutdown");
-    return ERROR;
+    switch (errno) {
+      case ENOTCONN:
+        socket->errorno = errno;
+        return ERROR;
+
+      default:
+        perror("shutdown()");
+        socket->errorno = errno;
+        assert(0 && "Shouldn't get an error on shutdown");
+        return ERROR;
+    }
   }
   socket->write_action = NULL;
   return OKAY;
@@ -458,6 +466,7 @@ socket_send (oi_socket *socket)
 
       default:
         perror("send()");
+        printf("%p had send error\n", socket);
         assert(0 && "oi shouldn't let this happen.");
         socket->errorno = errno;
         return ERROR;
@@ -513,7 +522,7 @@ socket_recv (oi_socket *socket)
 
       default:
         perror("recv()");
-        printf("unmatched errno %d\n", errno);
+        printf("unmatched errno %d %s\n\n", errno, strerror(errno));
         assert(0 && "recv returned error that oi should have caught before.");
         return ERROR;
     }
@@ -866,8 +875,19 @@ oi_socket_full_close (oi_socket *socket)
 
 void oi_socket_force_close (oi_socket *socket)
 {
+  release_write_buffer(socket);
+
+  ev_clear_pending (SOCKET_LOOP_ &socket->write_watcher);
+  ev_clear_pending (SOCKET_LOOP_ &socket->read_watcher);
+  ev_clear_pending (SOCKET_LOOP_ &socket->timeout_watcher);
+
+  socket->write_action = socket->read_action = NULL;
   // socket->errorno = OI_SOCKET_ERROR_FORCE_CLOSE
-  CLOSE_ASAP(socket);
+  close(socket->fd);
+
+  socket->fd = -1;
+
+  oi_socket_detach(socket);
 }
 
 void 
