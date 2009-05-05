@@ -41,7 +41,7 @@ ifdef GNUTLSDIR
 endif
 LDFLAGS += -lgnutls
 
-DEP = oi_socket.h oi_buf.h oi_error.h oi_queue.h
+DEP = oi_socket.h oi_buf.h oi_queue.h
 SRC = oi_socket.c oi_buf.c
 OBJ = ${SRC:.c=.o}
 
