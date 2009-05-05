@@ -47,13 +47,13 @@
 
 #if HAVE_GNUTLS
 # include <gnutls/gnutls.h>
-#endif // HAVE_GNUTLS
 
 /* a few forwards 
  * they wont even be defined if not having gnutls
  * */
 static int secure_full_goodbye (oi_socket *socket);
 static int secure_half_goodbye (oi_socket *socket);
+#endif // HAVE_GNUTLS
 
 #undef TRUE
 #define TRUE 1
@@ -99,18 +99,15 @@ oi_buf_new (const char *base, size_t len)
   return buf;
 }
 
-#define CLOSE_ASAP(socket) do {           \
-  if ((socket)->read_action) {            \
-    (socket)->read_action = full_close;   \
-  }                                       \
-  if ((socket)->write_action) {           \
-    (socket)->write_action = full_close;  \
-  }                                       \
+#define CLOSE_ASAP(socket) do {         \
+  (socket)->read_action = full_close;   \
+  (socket)->write_action = full_close;  \
 } while (0)
 
 static int 
 full_close(oi_socket *socket)
 {
+  //printf("close(%d)\n", socket->fd);
   if (close(socket->fd) == -1)
     return errno == EINTR ? AGAIN : ERROR;
 
@@ -125,6 +122,7 @@ half_close(oi_socket *socket)
   int r = shutdown(socket->fd, SHUT_WR);
   if (r == -1) {
     socket->errorno = errno;
+    perror("shutdown()");
     assert(0 && "Shouldn't get an error on shutdown");
     return ERROR;
   }
@@ -141,6 +139,9 @@ change_state_for_empty_out_stream (oi_socket *socket)
    * a very complicated bunch of close logic!
    * XXX this is awful. FIXME
    */
+  if (socket->write_action == full_close || socket->read_action == full_close)
+    return;
+
   if (socket->got_half_close == FALSE) {
     if (socket->got_full_close == FALSE) {
       /* Normal situation. Didn't get any close signals. */
@@ -340,8 +341,11 @@ secure_socket_recv(oi_socket *socket)
 
   if (recved >= 0) {
     /* Got EOF */
-    if (recved == 0)
+    if (recved == 0) {
       socket->read_action = NULL;
+      if (socket->write_action == NULL) 
+        CLOSE_ASAP(socket);
+    }
 
     if (socket->write_action) 
       socket->write_action = secure_socket_send;
@@ -520,6 +524,8 @@ socket_recv (oi_socket *socket)
   if (recved == 0) {
     oi_socket_read_stop(socket);
     socket->read_action = NULL;
+    if (socket->write_action == NULL)
+      CLOSE_ASAP(socket);
   }
 
   /* NOTE: EOF is signaled with recved == 0 on callback */
