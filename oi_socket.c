@@ -245,10 +245,10 @@ secure_handshake(oi_socket *socket)
     if (socket->on_connect) socket->on_connect(socket);
   }
 
-  if (socket->read_action)
+  if (socket->read_action == secure_handshake)
     socket->read_action = secure_socket_recv;
  
-  if (socket->write_action)
+  if (socket->write_action == secure_handshake)
     socket->write_action = secure_socket_send;
 
   return OKAY;
