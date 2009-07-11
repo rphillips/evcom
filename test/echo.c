@@ -1,4 +1,41 @@
-#include "test/common.c"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <assert.h>
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <netinet/in.h>
+
+
+#include <ev.h>
+#include <oi_socket.h>
+#include <gnutls/gnutls.h>
+
+#define HOST "127.0.0.1"
+#define SOCKFILE "/tmp/oi.sock"
+#define PORT "5000"
+
+int nconnections; 
+
+static void 
+on_peer_close(oi_socket *socket)
+{
+  assert(socket->errorno == 0);
+  //printf("server connection closed\n");
+  free(socket);
+}
+
+static void 
+on_peer_timeout(oi_socket *socket)
+{
+  fprintf(stderr, "peer connection timeout\n");
+  assert(0);
+}
+
+
 
 // timeout must match the timeout in timeout.rb
 #define TIMEOUT 5.0
@@ -25,11 +62,6 @@ on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
 
   nconnections++;
 
-#if HAVE_GNUTLS
-# if SECURE
-  anon_tls_server(socket);
-# endif
-#endif
 
   //printf("on server connection\n");
 
@@ -41,7 +73,6 @@ main(int argc, const char *argv[])
 {
   int r;
   oi_server server;
-  oi_socket client;
 
   //printf("sizeof(oi_server): %d\n", sizeof(oi_server));
   //printf("sizeof(oi_socket): %d\n", sizeof(oi_socket));
@@ -49,49 +80,22 @@ main(int argc, const char *argv[])
   oi_server_init(&server, 10);
   server.on_connection = on_server_connection;
 
-#if HAVE_GNUTLS
-# if SECURE
-  anon_tls_init();
-# endif
-#endif
-
   struct addrinfo *servinfo;
   struct addrinfo hints;
   memset(&hints, 0, sizeof hints);
-#if TCP
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
-    r = getaddrinfo(NULL, PORT, &hints, &servinfo);
-    assert(r == 0);
-#else
-    struct stat tstat;
-    if (lstat(SOCKFILE, &tstat) == 0) {
-      if (S_ISSOCK(tstat.st_mode))
-        unlink(SOCKFILE);
-    }
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_PASSIVE;
+  r = getaddrinfo(NULL, PORT, &hints, &servinfo);
+  assert(r == 0);
 
-    servinfo = malloc(sizeof(struct addrinfo));
-    servinfo->ai_family = AF_UNIX;
-    servinfo->ai_socktype = SOCK_STREAM;
-    servinfo->ai_protocol = 0;
-
-    struct sockaddr_un *sockaddr = calloc(sizeof(struct sockaddr_un), 1);
-    sockaddr->sun_family = AF_UNIX;
-    strcpy(sockaddr->sun_path, SOCKFILE);
-
-    servinfo->ai_addr = (struct sockaddr*)sockaddr;
-    servinfo->ai_addrlen = sizeof(struct sockaddr_un);
-#endif
   r = oi_server_listen(&server, servinfo);
   assert(r == 0);
   oi_server_attach(EV_DEFAULT_ &server);
 
   ev_loop(EV_DEFAULT_ 0);
 
-#if TCP
   freeaddrinfo(servinfo);
-#endif
 
   return 0;
 }

@@ -56,8 +56,9 @@ FAIL=ruby -e 'puts "\033[1;31m FAIL\033[m"'
 PASS=ruby -e 'puts "\033[1;32m PASS\033[m"'
 
 test: $(TESTS)
-	test/test > /dev/null && $(PASS) || $(FAIL)
-	@echo "timeouts: "
+	@echo test.c
+	@test/test > /dev/null && $(PASS) || $(FAIL)
+	@echo timeout.rb
 	@test/timeout.rb
 
 test/test: test/test.c $(OUTPUT_A)
