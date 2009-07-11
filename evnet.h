@@ -1,6 +1,6 @@
 /* Copyright (c) 2008,2009 Ryan Dahl
  *
- * evnet_queue comes from ngx_queue.h 
+ * evnet_queue comes from Nginx, ngx_queue.h
  * Copyright (C) 2002-2009 Igor Sysoev
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,7 @@
 
 #ifndef evnet_h
 #define evnet_h
+
 #ifdef __cplusplus
 extern "C" {
 #endif 
@@ -41,53 +42,16 @@ extern "C" {
 # include <gnutls/gnutls.h>
 #endif
 
-typedef struct evnet_queue evnet_queue;
-struct evnet_queue {
-    evnet_queue  *prev;
-    evnet_queue  *next;
-};
-
-#define evnet_queue_init(q)            \
-    (q)->prev = q;                  \
-    (q)->next = q
-
-#define evnet_queue_empty(h)           \
-    (h == (h)->prev)
-
-#define evnet_queue_insert_head(h, x)  \
-    (x)->next = (h)->next;          \
-    (x)->next->prev = x;            \
-    (x)->prev = h;                  \
-    (h)->next = x
-
-#define evnet_queue_head(h)            \
-    (h)->next
-
-#define evnet_queue_last(h)            \
-    (h)->prev
-
-#define evnet_queue_remove(x)          \
-    (x)->next->prev = (x)->prev;    \
-    (x)->prev->next = (x)->next;    \
-    (x)->prev = NULL;               \
-    (x)->next = NULL
-
-#define evnet_queue_data(q, type, link) \
-    (type *) ((unsigned char *) q - offsetof(type, link))
-
-typedef struct evnet_buf evnet_buf;
+typedef struct evnet_queue   evnet_queue;
+typedef struct evnet_buf     evnet_buf;
 typedef struct evnet_server  evnet_server;
 typedef struct evnet_socket  evnet_socket;
-
-evnet_buf * evnet_buf_new     (const char* base, size_t len);
-evnet_buf * evnet_buf_new2    (size_t len);
-void        evnet_buf_destroy (evnet_buf *);
 
 void evnet_server_init          (evnet_server *, int backlog);
  int evnet_server_listen        (evnet_server *, struct addrinfo *addrinfo);
 void evnet_server_attach        (EV_P_ evnet_server *);
 void evnet_server_detach        (evnet_server *);
-void evnet_server_close         (evnet_server *); 
+void evnet_server_close         (evnet_server *);  // synchronous
 
 void evnet_socket_init          (evnet_socket *, float timeout);
  int evnet_socket_connect       (evnet_socket *, struct addrinfo *addrinfo);
@@ -136,6 +100,16 @@ void evnet_socket_force_close (evnet_socket *);
  */
 void evnet_socket_set_secure_session (evnet_socket *, gnutls_session_t);
 #endif
+
+evnet_buf * evnet_buf_new     (const char* base, size_t len);
+evnet_buf * evnet_buf_new2    (size_t len);
+void        evnet_buf_destroy (evnet_buf *);
+
+
+struct evnet_queue {
+  evnet_queue  *prev;
+  evnet_queue  *next;
+};
 
 struct evnet_buf {
   /* public */
@@ -210,6 +184,38 @@ struct evnet_socket {
   void (*on_timeout)   (evnet_socket *);
   void *data;
 };
+
+#define evnet_queue_init(q)             \
+do {                                    \
+  (q)->prev = q;                        \
+  (q)->next = q;                        \
+} while (0)
+
+#define evnet_queue_empty(h) (h == (h)->prev)
+
+#define evnet_queue_head(h) (h)->next
+
+#define evnet_queue_insert_head(h, x)   \
+do {                                    \
+  (x)->next = (h)->next;                \
+  (x)->next->prev = x;                  \
+  (x)->prev = h;                        \
+  (h)->next = x;                        \
+} while (0)
+
+
+#define evnet_queue_last(h) (h)->prev
+
+#define evnet_queue_remove(x)           \
+do {                                    \
+  (x)->next->prev = (x)->prev;          \
+  (x)->prev->next = (x)->next;          \
+  (x)->prev = NULL;                     \
+  (x)->next = NULL;                     \
+} while (0)
+
+#define evnet_queue_data(q, type, link) \
+    (type *) ((unsigned char *) q - offsetof(type, link))
 
 #ifdef __cplusplus
 }

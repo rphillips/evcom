@@ -9,7 +9,7 @@ EVDIR=$(HOME)/local/libev
 GNUTLSDIR=/usr
 
 # CFLAGS and LDFLAGS are for the users to override from the command line.
-CFLAGS	= -g -I. -Wall 
+CFLAGS	= -g -I. -Wall -Werror
 LDFLAGS	= 
 
 CC = gcc
@@ -32,14 +32,10 @@ DEP = evnet.h
 SRC = evnet.c
 OBJ = ${SRC:.c=.o}
 
-VERSION = 0.1
 NAME=libevnet
 OUTPUT_A=$(NAME).a
 
-TESTS = test/test \
-				test/echo
-
-all: $(OUTPUT_A) $(TESTS)
+all: $(OUTPUT_A) 
 
 $(OUTPUT_A): $(OBJ)
 	$(AR) cru $(OUTPUT_A) $(OBJ)
@@ -53,7 +49,7 @@ ${OBJ}: ${DEP}
 FAIL=ruby -e 'puts "\033[1;31m FAIL\033[m"'
 PASS=ruby -e 'puts "\033[1;32m PASS\033[m"'
 
-test: $(TESTS)
+test: test/test test/echo test/timeout.rb
 	@echo test.c
 	@test/test > /dev/null && $(PASS) || $(FAIL)
 	@echo timeout.rb
@@ -63,7 +59,7 @@ test/test: test/test.c $(OUTPUT_A)
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
 
 test/echo: test/echo.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=0
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
 
 clean:
 	rm -rf test/test test/echo
