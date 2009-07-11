@@ -36,14 +36,8 @@ VERSION = 0.1
 NAME=liboi
 OUTPUT_A=$(NAME).a
 
-TESTS = test/test_ping_pong_tcp_secure \
-				test/test_ping_pong_unix_secure \
-				test/test_ping_pong_tcp_clear \
-				test/test_ping_pong_unix_clear \
-				test/test_connection_interruption_tcp_secure \
-				test/test_connection_interruption_unix_secure \
-				test/test_connection_interruption_tcp_clear \
-				test/test_connection_interruption_unix_clear \
+TESTS = test/test_tcp \
+				test/test_unix \
 				test/echo
 
 all: $(OUTPUT_A) $(TESTS)
@@ -57,48 +51,30 @@ $(OUTPUT_A): $(OBJ)
 
 ${OBJ}: ${DEP}
 
-FAIL=echo "FAIL"
-PASS=echo "PASS"
+FAIL=ruby -e 'puts "\033[1;31m FAIL\033[m"'
+PASS=ruby -e 'puts "\033[1;32m PASS\033[m"'
 
 test: $(TESTS)
 	@for i in test/test_*; do \
 		if [ ! -d $$i ]; then \
 			echo "$$i: ";	\
-			$$i && $(PASS) || $(FAIL); \
+			$$i > /dev/null && $(PASS) || $(FAIL); \
 		fi \
 	done 
 	@echo "timeouts: "
 	@test/timeout.rb
 
-test/test_ping_pong_tcp_secure: test/ping_pong.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=1
+test/test_tcp: test/test.c $(OUTPUT_A)
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1
 
-test/test_ping_pong_unix_secure: test/ping_pong.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0 -DSECURE=1
-
-test/test_ping_pong_tcp_clear: test/ping_pong.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=0
-
-test/test_ping_pong_unix_clear: test/ping_pong.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0 -DSECURE=0
-
-test/test_connection_interruption_tcp_secure: test/connection_interruption.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=1
-
-test/test_connection_interruption_unix_secure: test/connection_interruption.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0 -DSECURE=1
-
-test/test_connection_interruption_tcp_clear: test/connection_interruption.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=0
-
-test/test_connection_interruption_unix_clear: test/connection_interruption.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0 -DSECURE=0
+test/test_unix: test/test.c $(OUTPUT_A)
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0
 
 test/echo: test/echo.c $(OUTPUT_A)
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=0
 
 clean:
-	rm -rf test/test_* test/fancy_copy test/echo
+	rm -rf test/test_tcp test/test_unix test/echo
 	rm -f $(OUTPUT_A) *.o
 
 .PHONY: all clean test 
