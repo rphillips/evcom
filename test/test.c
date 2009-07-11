@@ -11,21 +11,19 @@
 
 #include <ev.h>
 #include <oi_socket.h>
-#include <gnutls/gnutls.h>
 
-static const struct addrinfo server_tcp_hints = 
-/* ai_flags      */ { AI_PASSIVE 
+#if HAVE_GNUTLS
+# include <gnutls/gnutls.h>
+#endif
+
+static const struct addrinfo tcp_hints = 
+/* ai_flags      */ { 0 
 /* ai_family     */ , AF_UNSPEC
 /* ai_socktype   */ , SOCK_STREAM
                     , 0
                     };
 
-static const struct addrinfo client_tcp_hints = 
-/* ai_flags      */ { 0
-/* ai_family     */ , AF_UNSPEC
-/* ai_socktype   */ , SOCK_STREAM
-                    , 0
-                    };
+#define MARK_PROGRESS write(STDERR_FILENO, ".", 1)
 
 #define HOST "127.0.0.1"
 #define SOCKFILE "/tmp/oi.sock"
@@ -33,6 +31,7 @@ static const struct addrinfo client_tcp_hints =
 
 static oi_server server;
 int nconnections; 
+int secure;
 
 static void 
 common_on_peer_close(oi_socket *socket)
@@ -41,7 +40,7 @@ common_on_peer_close(oi_socket *socket)
   printf("server connection closed\n");
 #if HAVE_GNUTLS
   assert(socket->gnutls_errorno == 0);
-  gnutls_deinit(socket->session);
+  if (secure) gnutls_deinit(socket->session);
 #endif
   free(socket);
 }
@@ -105,7 +104,7 @@ void anon_tls_client(oi_socket *socket)
 
 #define PING "PING"
 #define PONG "PONG"
-#define EXCHANGES 500
+#define EXCHANGES 5000
 #define PINGPONG_TIMEOUT 5.0
 
 int successful_ping_count; 
@@ -147,7 +146,7 @@ pingpong_on_server_connection(oi_server *_server, struct sockaddr *addr, socklen
   nconnections++;
 
 #if HAVE_GNUTLS
-  anon_tls_server(socket);
+  if (secure) anon_tls_server(socket);
 #endif
 
   printf("on server connection\n");
@@ -170,17 +169,22 @@ pingpong_on_client_read (oi_socket *socket, const void *base, size_t len)
     return;
   }
 
-  char buf[2000];
+  assert(len = strlen(PONG));
+
+  char buf[len+1];
   strncpy(buf, base, len);
   buf[len] = 0;
   printf("client got message: %s\n", buf);
   
   assert(strcmp(buf, PONG) == 0);
 
-  if(++successful_ping_count > EXCHANGES) {
+  if (++successful_ping_count > EXCHANGES) {
     oi_socket_close(socket);
     return;
   } 
+
+  if (successful_ping_count % (EXCHANGES/20) == 0) MARK_PROGRESS;
+
   oi_socket_write_simple(socket, PING, sizeof PING);
 }
 
@@ -189,7 +193,8 @@ pingpong ( )
 {
   int r;
   oi_socket client;
-
+  
+  successful_ping_count = 0;
   nconnections = 0;
 
   printf("sizeof(oi_server): %d\n", sizeof(oi_server));
@@ -200,7 +205,7 @@ pingpong ( )
 
   struct addrinfo *servinfo;
 #if TCP
-    r = getaddrinfo(NULL, PORT, &server_tcp_hints, &servinfo);
+    r = getaddrinfo(NULL, PORT, &tcp_hints, &servinfo);
     assert(r == 0);
 #else
     struct stat tstat;
@@ -232,7 +237,7 @@ pingpong ( )
   client.on_timeout = common_on_client_timeout;
 
 #if HAVE_GNUTLS
-  anon_tls_client(&client);
+  if (secure) anon_tls_client(&client);
 #endif
 
   r = oi_socket_connect(&client, servinfo);
@@ -241,6 +246,7 @@ pingpong ( )
 
   ev_loop(EV_DEFAULT_ 0);
 
+  printf("successful_ping_count = %d\n", successful_ping_count);
   assert(successful_ping_count == EXCHANGES + 1);
   assert(nconnections == 1);
 
@@ -284,7 +290,7 @@ connint_on_server_connection(oi_server *_server, struct sockaddr *addr, socklen_
   socket->on_timeout = common_on_peer_timeout;
 
 #if HAVE_GNUTLS
-  anon_tls_server(socket);
+  if (secure) anon_tls_server(socket);
 #endif
 
   printf("on server connection\n");
@@ -305,9 +311,12 @@ connint_on_client_close(oi_socket *socket)
   oi_socket_close(socket); // already closed, but it shouldn't crash if we try to do it again
 
   printf("client connection closed\n");
+
+  if (nconnections % (NCONN/20) == 0) MARK_PROGRESS;
+
   if(++nconnections == NCONN) {
-    oi_server_detach(&server);
-    printf("detaching server\n");
+    oi_server_close(&server);
+    printf("closing server\n");
   }
 }
 
@@ -325,11 +334,8 @@ connint_on_client_read(oi_socket *socket, const void *base, size_t len)
 
   printf("client got message: %s\n", buf);
   
-  if (strcmp(buf, "BYE") == 0) {
-    oi_socket_close(socket);
-  } else {
-    assert(0);
-  }
+  assert(strcmp(buf, "BYE") == 0);
+  oi_socket_close(socket);
 }
 
 int 
@@ -344,7 +350,7 @@ connint (void)
 
   struct addrinfo *servinfo;
 #if TCP
-    r = getaddrinfo(NULL, PORT, &server_tcp_hints, &servinfo);
+    r = getaddrinfo(NULL, PORT, &tcp_hints, &servinfo);
     assert(r == 0);
 #else
     struct stat tstat;
@@ -379,7 +385,7 @@ connint (void)
     client->on_close   = connint_on_client_close;
     client->on_timeout = common_on_client_timeout;
 #if HAVE_GNUTLS
-    anon_tls_client(client);
+    if (secure) anon_tls_client(client);
 #endif
     r = oi_socket_connect(client, servinfo);
     assert(r == 0 && "problem connecting");
@@ -406,15 +412,18 @@ main (void)
 
   gnutls_dh_params_init (&dh_params);
 
-  fprintf(stderr, "..");
   fsync((int)stderr);
   gnutls_dh_params_generate2 (dh_params, DH_BITS);
-  fprintf(stderr, ".");
 
   gnutls_anon_allocate_server_credentials (&server_credentials);
   gnutls_anon_set_server_dh_params (server_credentials, dh_params);
 #endif
 
+  secure = 0;
+  assert(pingpong() == 0);
+  assert(connint() == 0);
+
+  secure = 1;
   assert(pingpong() == 0);
   assert(connint() == 0);
 

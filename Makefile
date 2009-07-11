@@ -4,6 +4,8 @@ EVDIR=$(HOME)/local/libev
 
 # Define GNUTLSDIR=/foo/bar if your gnutls header and library files are in
 # /foo/bar/include and /foo/bar/lib directories.
+#
+# Comment out the following line to disable TLS
 GNUTLSDIR=/usr
 
 # CFLAGS and LDFLAGS are for the users to override from the command line.
@@ -25,8 +27,8 @@ LDFLAGS += -lev
 ifdef GNUTLSDIR
 	CFLAGS += -I$(GNUTLSDIR)/include -DHAVE_GNUTLS=1
 	LDFLAGS += -L$(GNUTLSDIR)/lib
+	LDFLAGS += -lgnutls
 endif
-LDFLAGS += -lgnutls
 
 DEP = oi_socket.h
 SRC = oi_socket.c
