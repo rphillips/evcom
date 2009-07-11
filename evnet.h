@@ -1,6 +1,6 @@
 /* Copyright (c) 2008,2009 Ryan Dahl
  *
- * oi_queue comes from ngx_queue.h 
+ * evnet_queue comes from ngx_queue.h 
  * Copyright (C) 2002-2009 Igor Sysoev
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,8 +28,8 @@
 #include <ev.h>
 #include <stddef.h> /* offsetof() */
 
-#ifndef oi_socket_h
-#define oi_socket_h
+#ifndef evnet_h
+#define evnet_h
 #ifdef __cplusplus
 extern "C" {
 #endif 
@@ -40,77 +40,78 @@ extern "C" {
 #if HAVE_GNUTLS
 # include <gnutls/gnutls.h>
 #endif
-typedef struct oi_queue oi_queue;
-struct oi_queue {
-    oi_queue  *prev;
-    oi_queue  *next;
+
+typedef struct evnet_queue evnet_queue;
+struct evnet_queue {
+    evnet_queue  *prev;
+    evnet_queue  *next;
 };
 
-#define oi_queue_init(q)            \
+#define evnet_queue_init(q)            \
     (q)->prev = q;                  \
     (q)->next = q
 
-#define oi_queue_empty(h)           \
+#define evnet_queue_empty(h)           \
     (h == (h)->prev)
 
-#define oi_queue_insert_head(h, x)  \
+#define evnet_queue_insert_head(h, x)  \
     (x)->next = (h)->next;          \
     (x)->next->prev = x;            \
     (x)->prev = h;                  \
     (h)->next = x
 
-#define oi_queue_head(h)            \
+#define evnet_queue_head(h)            \
     (h)->next
 
-#define oi_queue_last(h)            \
+#define evnet_queue_last(h)            \
     (h)->prev
 
-#define oi_queue_remove(x)          \
+#define evnet_queue_remove(x)          \
     (x)->next->prev = (x)->prev;    \
     (x)->prev->next = (x)->next;    \
     (x)->prev = NULL;               \
     (x)->next = NULL
 
-#define oi_queue_data(q, type, link) \
+#define evnet_queue_data(q, type, link) \
     (type *) ((unsigned char *) q - offsetof(type, link))
 
-typedef struct oi_buf oi_buf;
-typedef struct oi_server  oi_server;
-typedef struct oi_socket  oi_socket;
+typedef struct evnet_buf evnet_buf;
+typedef struct evnet_server  evnet_server;
+typedef struct evnet_socket  evnet_socket;
 
-oi_buf * oi_buf_new     (const char* base, size_t len);
-oi_buf * oi_buf_new2    (size_t len);
-void     oi_buf_destroy (oi_buf *);
+evnet_buf * evnet_buf_new     (const char* base, size_t len);
+evnet_buf * evnet_buf_new2    (size_t len);
+void        evnet_buf_destroy (evnet_buf *);
 
-void oi_server_init          (oi_server *, int backlog);
- int oi_server_listen        (oi_server *, struct addrinfo *addrinfo);
-void oi_server_attach        (EV_P_ oi_server *);
-void oi_server_detach        (oi_server *);
-void oi_server_close         (oi_server *); 
+void evnet_server_init          (evnet_server *, int backlog);
+ int evnet_server_listen        (evnet_server *, struct addrinfo *addrinfo);
+void evnet_server_attach        (EV_P_ evnet_server *);
+void evnet_server_detach        (evnet_server *);
+void evnet_server_close         (evnet_server *); 
 
-void oi_socket_init          (oi_socket *, float timeout);
- int oi_socket_connect       (oi_socket *, struct addrinfo *addrinfo);
-void oi_socket_attach        (EV_P_ oi_socket *);
-void oi_socket_detach        (oi_socket *);
-void oi_socket_read_start    (oi_socket *);
-void oi_socket_read_stop     (oi_socket *);
+void evnet_socket_init          (evnet_socket *, float timeout);
+ int evnet_socket_connect       (evnet_socket *, struct addrinfo *addrinfo);
+void evnet_socket_attach        (EV_P_ evnet_socket *);
+void evnet_socket_detach        (evnet_socket *);
+void evnet_socket_read_start    (evnet_socket *);
+void evnet_socket_read_stop     (evnet_socket *);
 
 /* Resets the timeout to stay alive for another socket->timeout seconds
  */
-void oi_socket_reset_timeout (oi_socket *);
+void evnet_socket_reset_timeout (evnet_socket *);
 
 /* Writes a buffer to the socket. 
- * (Do not send a NULL oi_buf or a buffer with oi_buf->base == NULL.)
+ * (Do not send a NULL evnet_buf or a buffer with evnet_buf->base == NULL.)
  */
-void oi_socket_write         (oi_socket *, oi_buf *);
+void evnet_socket_write         (evnet_socket *, evnet_buf *);
 
-void oi_socket_write_simple  (oi_socket *, const char *str, size_t len);
+void evnet_socket_write_simple  (evnet_socket *, const char *str, size_t len);
 
-/* Once the write buffer is drained, oi_socket_close will shutdown the
+/* Once the write buffer is drained, evnet_socket_close will shutdown the
  * writing end of the socket and will close the read end once the server
  * replies with an EOF. 
  */
-void oi_socket_close         (oi_socket *);
+void evnet_socket_close         (evnet_socket *);
 
 /* Do not wait for the server to reply with EOF.  This will only be called
  * once the write buffer is drained.  
@@ -118,37 +119,37 @@ void oi_socket_close         (oi_socket *);
  * packets if this is called when data is still being received from the
  * server.
  */
-void oi_socket_full_close    (oi_socket *);
+void evnet_socket_full_close    (evnet_socket *);
 
 /* The most extreme measure. 
  * Will not wait for the write queue to complete. 
  */
-void oi_socket_force_close (oi_socket *);
+void evnet_socket_force_close (evnet_socket *);
 
 
 #if HAVE_GNUTLS
-/* Tells the socket to use transport layer security (SSL). oi_socket does
+/* Tells the socket to use transport layer security (SSL). evnet_socket does
  * not want to make any decisions about security requirements, so the
  * majoirty of GnuTLS configuration is left to the user. Only the transport
- * layer of GnuTLS is controlled by oi_socket. That is, do not use
+ * layer of GnuTLS is controlled by evnet_socket. That is, do not use
  * gnutls_transport_* functions.  Do use the rest of GnuTLS's API.
  */
-void oi_socket_set_secure_session (oi_socket *, gnutls_session_t);
+void evnet_socket_set_secure_session (evnet_socket *, gnutls_session_t);
 #endif
 
-struct oi_buf {
+struct evnet_buf {
   /* public */
   char *base;
   size_t len;
-  void (*release) (oi_buf *); /* called when oi is done with the object */
+  void (*release) (evnet_buf *); /* called when oi is done with the object */
   void *data;
 
   /* private */
   size_t written;
-  oi_queue queue;
+  evnet_queue queue;
 };
 
-struct oi_server {
+struct evnet_server {
   /* read only */
   int fd;
   int backlog;
@@ -162,19 +163,19 @@ struct oi_server {
   ev_io connection_watcher;
 
   /* public */
-  oi_socket* (*on_connection) (oi_server *, struct sockaddr *remote_addr, socklen_t remove_addr_len);
-  void       (*on_error)      (oi_server *);
+  evnet_socket* (*on_connection) (evnet_server *, struct sockaddr *remote_addr, socklen_t remove_addr_len);
+  void       (*on_error)      (evnet_server *);
   void *data;
 };
 
-struct oi_socket {
+struct evnet_socket {
   /* read only */
   int fd;
 #if EV_MULTIPLICITY
   struct ev_loop *loop;
 #endif
-  oi_server *server;
-  oi_queue out_stream;
+  evnet_server *server;
+  evnet_queue out_stream;
   size_t written;
   unsigned attached:1;
   unsigned connected:1;
@@ -183,8 +184,8 @@ struct oi_socket {
   unsigned got_half_close:1;
 
   /* NULL = that end of the socket is closed. */
-  int (*read_action)  (oi_socket *);
-  int (*write_action) (oi_socket *);
+  int (*read_action)  (evnet_socket *);
+  int (*write_action) (evnet_socket *);
 
   /* ERROR CODES. 0 = no error. Check on_close. */
   int errorno; 
@@ -202,15 +203,15 @@ struct oi_socket {
   
   /* public */
   size_t chunksize; /* the maximum chunk that on_read() will return */
-  void (*on_connect)   (oi_socket *);
-  void (*on_read)      (oi_socket *, const void *buf, size_t count);
-  void (*on_drain)     (oi_socket *);
-  void (*on_close)     (oi_socket *);
-  void (*on_timeout)   (oi_socket *);
+  void (*on_connect)   (evnet_socket *);
+  void (*on_read)      (evnet_socket *, const void *buf, size_t count);
+  void (*on_drain)     (evnet_socket *);
+  void (*on_close)     (evnet_socket *);
+  void (*on_timeout)   (evnet_socket *);
   void *data;
 };
 
 #ifdef __cplusplus
 }
 #endif 
-#endif /* oi_socket_h */
+#endif /* evnet_h */

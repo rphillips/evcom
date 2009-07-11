@@ -11,7 +11,7 @@
 
 
 #include <ev.h>
-#include <oi_socket.h>
+#include <evnet.h>
 #include <gnutls/gnutls.h>
 
 #define HOST "127.0.0.1"
@@ -21,7 +21,7 @@
 int nconnections; 
 
 static void 
-on_peer_close(oi_socket *socket)
+on_peer_close(evnet_socket *socket)
 {
   assert(socket->errorno == 0);
   //printf("server connection closed\n");
@@ -29,7 +29,7 @@ on_peer_close(oi_socket *socket)
 }
 
 static void 
-on_peer_timeout(oi_socket *socket)
+on_peer_timeout(evnet_socket *socket)
 {
   fprintf(stderr, "peer connection timeout\n");
   assert(0);
@@ -43,19 +43,19 @@ on_peer_timeout(oi_socket *socket)
 int successful_ping_count; 
 
 static void 
-on_peer_read(oi_socket *socket, const void *base, size_t len)
+on_peer_read(evnet_socket *socket, const void *base, size_t len)
 {
   if(len == 0) 
     return;
 
-  oi_socket_write_simple(socket, base, len);
+  evnet_socket_write_simple(socket, base, len);
 }
 
-static oi_socket* 
-on_server_connection(oi_server *server, struct sockaddr *addr, socklen_t len)
+static evnet_socket* 
+on_server_connection(evnet_server *server, struct sockaddr *addr, socklen_t len)
 {
-  oi_socket *socket = malloc(sizeof(oi_socket));
-  oi_socket_init(socket, TIMEOUT);
+  evnet_socket *socket = malloc(sizeof(evnet_socket));
+  evnet_socket_init(socket, TIMEOUT);
   socket->on_read = on_peer_read;
   socket->on_close = on_peer_close;
   socket->on_timeout = on_peer_timeout;
@@ -72,12 +72,12 @@ int
 main(int argc, const char *argv[])
 {
   int r;
-  oi_server server;
+  evnet_server server;
 
-  //printf("sizeof(oi_server): %d\n", sizeof(oi_server));
-  //printf("sizeof(oi_socket): %d\n", sizeof(oi_socket));
+  //printf("sizeof(evnet_server): %d\n", sizeof(evnet_server));
+  //printf("sizeof(evnet_socket): %d\n", sizeof(evnet_socket));
 
-  oi_server_init(&server, 10);
+  evnet_server_init(&server, 10);
   server.on_connection = on_server_connection;
 
   struct addrinfo *servinfo;
@@ -89,9 +89,9 @@ main(int argc, const char *argv[])
   r = getaddrinfo(NULL, PORT, &hints, &servinfo);
   assert(r == 0);
 
-  r = oi_server_listen(&server, servinfo);
+  r = evnet_server_listen(&server, servinfo);
   assert(r == 0);
-  oi_server_attach(EV_DEFAULT_ &server);
+  evnet_server_attach(EV_DEFAULT_ &server);
 
   ev_loop(EV_DEFAULT_ 0);
 

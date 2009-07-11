@@ -12,8 +12,6 @@ GNUTLSDIR=/usr
 CFLAGS	= -g -I. -Wall 
 LDFLAGS	= 
 
-PREFIX = $(HOME)/local/liboi
-
 CC = gcc
 AR = ar
 RANLIB = ranlib
@@ -30,12 +28,12 @@ ifdef GNUTLSDIR
 	LDFLAGS += -lgnutls
 endif
 
-DEP = oi_socket.h
-SRC = oi_socket.c
+DEP = evnet.h
+SRC = evnet.c
 OBJ = ${SRC:.c=.o}
 
 VERSION = 0.1
-NAME=liboi
+NAME=libevnet
 OUTPUT_A=$(NAME).a
 
 TESTS = test/test \
