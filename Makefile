@@ -9,7 +9,7 @@ EVDIR=$(HOME)/local/libev
 GNUTLSDIR=/usr
 
 # CFLAGS and LDFLAGS are for the users to override from the command line.
-CFLAGS	= -g -I.
+CFLAGS	= -g -I. -Wall 
 LDFLAGS	= 
 
 PREFIX = $(HOME)/local/liboi
@@ -38,8 +38,7 @@ VERSION = 0.1
 NAME=liboi
 OUTPUT_A=$(NAME).a
 
-TESTS = test/test_tcp \
-				test/test_unix \
+TESTS = test/test \
 				test/echo
 
 all: $(OUTPUT_A) $(TESTS)
@@ -57,26 +56,18 @@ FAIL=ruby -e 'puts "\033[1;31m FAIL\033[m"'
 PASS=ruby -e 'puts "\033[1;32m PASS\033[m"'
 
 test: $(TESTS)
-	@for i in test/test_*; do \
-		if [ ! -d $$i ]; then \
-			echo "$$i: ";	\
-			$$i > /dev/null && $(PASS) || $(FAIL); \
-		fi \
-	done 
+	test/test > /dev/null && $(PASS) || $(FAIL)
 	@echo "timeouts: "
 	@test/timeout.rb
 
-test/test_tcp: test/test.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1
-
-test/test_unix: test/test.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=0
+test/test: test/test.c $(OUTPUT_A)
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
 
 test/echo: test/echo.c $(OUTPUT_A)
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^ -DTCP=1 -DSECURE=0
 
 clean:
-	rm -rf test/test_tcp test/test_unix test/echo
+	rm -rf test/test test/echo
 	rm -f $(OUTPUT_A) *.o
 
 .PHONY: all clean test 

@@ -31,7 +31,7 @@ static const struct addrinfo tcp_hints =
 
 static oi_server server;
 int nconnections; 
-int secure;
+int use_tls;
 
 static void 
 common_on_peer_close(oi_socket *socket)
@@ -40,7 +40,7 @@ common_on_peer_close(oi_socket *socket)
   printf("server connection closed\n");
 #if HAVE_GNUTLS
   assert(socket->gnutls_errorno == 0);
-  if (secure) gnutls_deinit(socket->session);
+  if (use_tls) gnutls_deinit(socket->session);
 #endif
   free(socket);
 }
@@ -146,7 +146,7 @@ pingpong_on_server_connection(oi_server *_server, struct sockaddr *addr, socklen
   nconnections++;
 
 #if HAVE_GNUTLS
-  if (secure) anon_tls_server(socket);
+  if (use_tls) anon_tls_server(socket);
 #endif
 
   printf("on server connection\n");
@@ -189,7 +189,7 @@ pingpong_on_client_read (oi_socket *socket, const void *base, size_t len)
 }
 
 int
-pingpong ( )
+pingpong (struct addrinfo *servinfo)
 {
   int r;
   oi_socket client;
@@ -203,29 +203,6 @@ pingpong ( )
   oi_server_init(&server, 10);
   server.on_connection = pingpong_on_server_connection;
 
-  struct addrinfo *servinfo;
-#if TCP
-    r = getaddrinfo(NULL, PORT, &tcp_hints, &servinfo);
-    assert(r == 0);
-#else
-    struct stat tstat;
-    if (lstat(SOCKFILE, &tstat) == 0) {
-      if (S_ISSOCK(tstat.st_mode))
-        unlink(SOCKFILE);
-    }
-
-    servinfo = malloc(sizeof(struct addrinfo));
-    servinfo->ai_family = AF_UNIX;
-    servinfo->ai_socktype = SOCK_STREAM;
-    servinfo->ai_protocol = 0;
-
-    struct sockaddr_un *sockaddr = calloc(sizeof(struct sockaddr_un), 1);
-    sockaddr->sun_family = AF_UNIX;
-    strcpy(sockaddr->sun_path, SOCKFILE);
-
-    servinfo->ai_addr = (struct sockaddr*)sockaddr;
-    servinfo->ai_addrlen = sizeof(struct sockaddr_un);
-#endif
   r = oi_server_listen(&server, servinfo);
   assert(r == 0);
   oi_server_attach(EV_DEFAULT_ &server);
@@ -237,7 +214,7 @@ pingpong ( )
   client.on_timeout = common_on_client_timeout;
 
 #if HAVE_GNUTLS
-  if (secure) anon_tls_client(&client);
+  if (use_tls) anon_tls_client(&client);
 #endif
 
   r = oi_socket_connect(&client, servinfo);
@@ -249,10 +226,6 @@ pingpong ( )
   printf("successful_ping_count = %d\n", successful_ping_count);
   assert(successful_ping_count == EXCHANGES + 1);
   assert(nconnections == 1);
-
-#if TCP
-  freeaddrinfo(servinfo);
-#endif
 
   return 0;
 }
@@ -290,7 +263,7 @@ connint_on_server_connection(oi_server *_server, struct sockaddr *addr, socklen_
   socket->on_timeout = common_on_peer_timeout;
 
 #if HAVE_GNUTLS
-  if (secure) anon_tls_server(socket);
+  if (use_tls) anon_tls_server(socket);
 #endif
 
   printf("on server connection\n");
@@ -339,7 +312,7 @@ connint_on_client_read(oi_socket *socket, const void *base, size_t len)
 }
 
 int 
-connint (void)
+connint (struct addrinfo *servinfo)
 {
   int r;
 
@@ -348,29 +321,6 @@ connint (void)
   oi_server_init(&server, 1000);
   server.on_connection = connint_on_server_connection;
 
-  struct addrinfo *servinfo;
-#if TCP
-    r = getaddrinfo(NULL, PORT, &tcp_hints, &servinfo);
-    assert(r == 0);
-#else
-    struct stat tstat;
-    if (lstat(SOCKFILE, &tstat) == 0) {
-      if (S_ISSOCK(tstat.st_mode))
-        unlink(SOCKFILE);
-    }
-
-    servinfo = malloc(sizeof(struct addrinfo));
-    servinfo->ai_family = AF_UNIX;
-    servinfo->ai_socktype = SOCK_STREAM;
-    servinfo->ai_protocol = 0;
-
-    struct sockaddr_un *sockaddr = calloc(sizeof(struct sockaddr_un), 1);
-    sockaddr->sun_family = AF_UNIX;
-    strcpy(sockaddr->sun_path, SOCKFILE);
-
-    servinfo->ai_addr = (struct sockaddr*)sockaddr;
-    servinfo->ai_addrlen = sizeof(struct sockaddr_un);
-#endif
 
   oi_server_listen(&server, servinfo);
   oi_server_attach(EV_DEFAULT_ &server);
@@ -385,7 +335,7 @@ connint (void)
     client->on_close   = connint_on_client_close;
     client->on_timeout = common_on_client_timeout;
 #if HAVE_GNUTLS
-    if (secure) anon_tls_client(client);
+    if (use_tls) anon_tls_client(client);
 #endif
     r = oi_socket_connect(client, servinfo);
     assert(r == 0 && "problem connecting");
@@ -396,11 +346,56 @@ connint (void)
 
   assert(nconnections == NCONN);
 
-#if TCP
-  freeaddrinfo(servinfo);
-#endif
-
   return 0;
+}
+
+
+struct addrinfo *
+create_tcp_address ( )
+{
+  struct addrinfo *servinfo;
+  int r = getaddrinfo(NULL, PORT, &tcp_hints, &servinfo);
+  assert(r == 0);
+  return servinfo;
+}
+
+void
+free_tcp_address (struct addrinfo *servinfo)
+{
+  freeaddrinfo(servinfo);
+}
+
+
+struct addrinfo *
+create_unix_address ( )
+{
+  struct addrinfo *servinfo;
+  struct stat tstat;
+  if (lstat(SOCKFILE, &tstat) == 0) {
+    assert(S_ISSOCK(tstat.st_mode));
+    unlink(SOCKFILE);
+  }
+
+  servinfo = malloc(sizeof(struct addrinfo));
+  servinfo->ai_family = AF_UNIX;
+  servinfo->ai_socktype = SOCK_STREAM;
+  servinfo->ai_protocol = 0;
+
+  struct sockaddr_un *sockaddr = calloc(sizeof(struct sockaddr_un), 1);
+  sockaddr->sun_family = AF_UNIX;
+  strcpy(sockaddr->sun_path, SOCKFILE);
+
+  servinfo->ai_addr = (struct sockaddr*)sockaddr;
+  servinfo->ai_addrlen = sizeof(struct sockaddr_un);
+
+  return servinfo;
+}
+
+void
+free_unix_address (struct addrinfo *servinfo)
+{
+  free(servinfo->ai_addr);
+  free(servinfo);
 }
 
 
@@ -419,13 +414,45 @@ main (void)
   gnutls_anon_set_server_dh_params (server_credentials, dh_params);
 #endif
 
-  secure = 0;
-  assert(pingpong() == 0);
-  assert(connint() == 0);
+  struct addrinfo *tcp_address = create_tcp_address();
+  struct addrinfo *unix_address;
 
-  secure = 1;
-  assert(pingpong() == 0);
-  assert(connint() == 0);
+  
+  use_tls = 0;
+  assert(pingpong(tcp_address) == 0);
+  assert(connint(tcp_address) == 0);
 
+#if HAVE_GNUTLS
+  use_tls = 1;
+  assert(pingpong(tcp_address) == 0);
+  assert(connint(tcp_address) == 0);
+#endif 
+
+
+  
+  use_tls = 0;
+
+  unix_address = create_unix_address();
+  assert(pingpong(unix_address) == 0);
+  free_unix_address(unix_address);
+
+  unix_address = create_unix_address();
+  assert(connint(unix_address) == 0);
+  free_unix_address(unix_address);
+
+#if HAVE_GNUTLS
+  use_tls = 1;
+
+  unix_address = create_unix_address();
+  assert(pingpong(unix_address) == 0);
+  free_unix_address(unix_address);
+
+  unix_address = create_unix_address();
+  assert(connint(unix_address) == 0);
+  free_unix_address(unix_address);
+#endif 
+
+
+  free_tcp_address(tcp_address);
   return 0;
 }
