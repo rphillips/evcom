@@ -35,10 +35,10 @@
 extern "C" {
 #endif 
 
-#ifndef HAVE_GNUTLS
-# define HAVE_GNUTLS 0
+#ifndef EVNET_HAVE_GNUTLS
+# define EVNET_HAVE_GNUTLS 0
 #endif
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
 # include <gnutls/gnutls.h>
 #endif
 
@@ -91,7 +91,7 @@ void evnet_socket_full_close    (evnet_socket *);
 void evnet_socket_force_close (evnet_socket *);
 
 
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
 /* Tells the socket to use transport layer security (SSL). evnet_socket does
  * not want to make any decisions about security requirements, so the
  * majoirty of GnuTLS configuration is left to the user. Only the transport
@@ -163,7 +163,7 @@ struct evnet_socket {
 
   /* ERROR CODES. 0 = no error. Check on_close. */
   int errorno; 
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
   int gnutls_errorno;
 #endif
 
@@ -171,7 +171,7 @@ struct evnet_socket {
   ev_io write_watcher;
   ev_io read_watcher;
   ev_timer timeout_watcher;
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
   gnutls_session_t session;
 #endif
   

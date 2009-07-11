@@ -23,7 +23,7 @@ endif
 LDFLAGS += -lev
 
 ifdef GNUTLSDIR
-	CFLAGS += -I$(GNUTLSDIR)/include -DHAVE_GNUTLS=1
+	CFLAGS += -I$(GNUTLSDIR)/include -DEVNET_HAVE_GNUTLS=1
 	LDFLAGS += -L$(GNUTLSDIR)/lib
 	LDFLAGS += -lgnutls
 endif

@@ -12,7 +12,7 @@
 #include <ev.h>
 #include <evnet.h>
 
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
 # include <gnutls/gnutls.h>
 #endif
 
@@ -38,7 +38,7 @@ common_on_peer_close(evnet_socket *socket)
 {
   assert(socket->errorno == 0);
   printf("server connection closed\n");
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
   assert(socket->gnutls_errorno == 0);
   if (use_tls) gnutls_deinit(socket->session);
 #endif
@@ -59,7 +59,7 @@ common_on_peer_timeout(evnet_socket *socket)
   assert(0);
 }
 
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
 #define DH_BITS 768
 gnutls_anon_server_credentials_t server_credentials;
 const int kx_prio[] = { GNUTLS_KX_ANON_DH, 0 };
@@ -96,7 +96,7 @@ void anon_tls_client(evnet_socket *socket)
   assert(socket->secure);
 }
 
-#endif // HAVE_GNUTLS
+#endif // EVNET_HAVE_GNUTLS
 
 
 
@@ -145,7 +145,7 @@ pingpong_on_server_connection(evnet_server *_server, struct sockaddr *addr, sock
 
   nconnections++;
 
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
   if (use_tls) anon_tls_server(socket);
 #endif
 
@@ -213,7 +213,7 @@ pingpong (struct addrinfo *servinfo)
   client.on_close   = pingpong_on_client_close;
   client.on_timeout = common_on_client_timeout;
 
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
   if (use_tls) anon_tls_client(&client);
 #endif
 
@@ -262,7 +262,7 @@ connint_on_server_connection(evnet_server *_server, struct sockaddr *addr, sockl
   socket->on_close   = common_on_peer_close;
   socket->on_timeout = common_on_peer_timeout;
 
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
   if (use_tls) anon_tls_server(socket);
 #endif
 
@@ -334,7 +334,7 @@ connint (struct addrinfo *servinfo)
     client->on_connect = connint_on_client_connect;
     client->on_close   = connint_on_client_close;
     client->on_timeout = common_on_client_timeout;
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
     if (use_tls) anon_tls_client(client);
 #endif
     r = evnet_socket_connect(client, servinfo);
@@ -402,7 +402,7 @@ free_unix_address (struct addrinfo *servinfo)
 int
 main (void)
 {
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
   gnutls_global_init();
 
   gnutls_dh_params_init (&dh_params);
@@ -422,7 +422,7 @@ main (void)
   assert(pingpong(tcp_address) == 0);
   assert(connint(tcp_address) == 0);
 
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
   use_tls = 1;
   assert(pingpong(tcp_address) == 0);
   assert(connint(tcp_address) == 0);
@@ -440,7 +440,7 @@ main (void)
   assert(connint(unix_address) == 0);
   free_unix_address(unix_address);
 
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
   use_tls = 1;
 
   unix_address = create_unix_address();

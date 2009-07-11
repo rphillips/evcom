@@ -47,8 +47,7 @@
 # define SERVER_LOOP_
 #endif // EV_MULTIPLICITY
 
-#if HAVE_GNUTLS
-# include <gnutls/gnutls.h>
+#if EVNET_HAVE_GNUTLS
 static int secure_full_goodbye (evnet_socket *socket);
 static int secure_half_goodbye (evnet_socket *socket);
 #endif
@@ -163,14 +162,14 @@ change_state_for_empty_out_stream (evnet_socket *socket)
     } else {
       /* Got Full Close. */
       if (socket->read_action)
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
         socket->read_action = socket->secure ? secure_full_goodbye : full_close;
 #else 
         socket->read_action = full_close;
 #endif
 
       if (socket->write_action)
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
         socket->write_action = socket->secure ? secure_full_goodbye : full_close;
 #else 
         socket->write_action = full_close;
@@ -179,7 +178,7 @@ change_state_for_empty_out_stream (evnet_socket *socket)
   } else {
     /* Got Half Close. */
     if (socket->write_action)
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
       socket->write_action = socket->secure ? secure_half_goodbye : half_close;
 #else 
       socket->write_action = half_close;
@@ -211,7 +210,7 @@ update_write_buffer_after_send (evnet_socket *socket, ssize_t sent)
   }
 }
 
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
 static int secure_socket_send(evnet_socket *socket);
 static int secure_socket_recv(evnet_socket *socket);
 
@@ -541,7 +540,7 @@ assign_file_descriptor (evnet_socket *socket, int fd)
   socket->read_action = socket_recv;
   socket->write_action = socket_send;
 
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
   if (socket->secure) {
     gnutls_transport_set_lowat(socket->session, 0); 
     gnutls_transport_set_push_function(socket->session, nosigpipe_push);
@@ -827,7 +826,7 @@ evnet_socket_init(evnet_socket *socket, float timeout)
   socket->errorno = 0;
 
   socket->secure = FALSE;
-#if HAVE_GNUTLS
+#if EVNET_HAVE_GNUTLS
   socket->gnutls_errorno = 0;
   socket->session = NULL;
 #endif 
