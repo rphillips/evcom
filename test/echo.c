@@ -29,8 +29,9 @@ on_peer_close(evnet_socket *socket)
 }
 
 static void 
-on_peer_timeout(evnet_socket *socket)
+on_peer_timeout (evnet_socket *socket)
 {
+  assert(socket);
   fprintf(stderr, "peer connection timeout\n");
   assert(0);
 }
@@ -54,6 +55,10 @@ on_peer_read(evnet_socket *socket, const void *base, size_t len)
 static evnet_socket* 
 on_server_connection(evnet_server *server, struct sockaddr *addr, socklen_t len)
 {
+  assert(server);
+  assert(addr);
+  assert(len > 0);
+
   evnet_socket *socket = malloc(sizeof(evnet_socket));
   evnet_socket_init(socket, TIMEOUT);
   socket->on_read = on_peer_read;
@@ -69,7 +74,7 @@ on_server_connection(evnet_server *server, struct sockaddr *addr, socklen_t len)
 }
 
 int 
-main(int argc, const char *argv[])
+main(void)
 {
   int r;
   evnet_server server;

@@ -716,6 +716,10 @@ on_timeout(EV_P_ ev_timer *watcher, int revents)
 {
   evnet_socket *socket = watcher->data;
 
+#if EV_MULTIPLICITY
+  assert(socket->loop == loop);
+#endif
+  assert(revents == EV_TIMEOUT);
   assert(watcher == &socket->timeout_watcher);
 
   // printf("on_timeout\n");

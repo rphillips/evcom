@@ -17,9 +17,9 @@
 #endif
 
 static const struct addrinfo tcp_hints = 
-/* ai_flags      */ { 0 
-/* ai_family     */ , AF_UNSPEC
-/* ai_socktype   */ , SOCK_STREAM
+/* ai_flags      */ { .ai_flags = 0 
+/* ai_family     */ , .ai_family = AF_UNSPEC
+/* ai_socktype   */ , .ai_socktype = SOCK_STREAM
                     , 0
                     };
 
@@ -48,13 +48,14 @@ common_on_peer_close(evnet_socket *socket)
 static void 
 common_on_client_timeout(evnet_socket *socket)
 {
+  assert(socket);
   printf("client connection timeout\n");
-  assert(0);
 }
 
 static void 
 common_on_peer_timeout(evnet_socket *socket)
 {
+  assert(socket);
   fprintf(stderr, "peer connection timeout\n");
   assert(0);
 }
@@ -128,14 +129,17 @@ pingpong_on_peer_read(evnet_socket *socket, const void *base, size_t len)
 static void 
 pingpong_on_client_close(evnet_socket *socket)
 {
+  assert(socket);
   printf("client connection closed\n");
   evnet_server_close(&server);
 }
 
 static evnet_socket* 
-pingpong_on_server_connection(evnet_server *_server, struct sockaddr *addr, socklen_t len)
+pingpong_on_server_connection (evnet_server *_server, struct sockaddr *addr, socklen_t len)
 {
   assert(_server == &server);
+  assert(addr);
+  assert(len > 0);
 
   evnet_socket *socket = malloc(sizeof(evnet_socket));
   evnet_socket_init(socket, PINGPONG_TIMEOUT);
@@ -239,6 +243,7 @@ pingpong (struct addrinfo *servinfo)
 static void 
 connint_on_peer_read(evnet_socket *socket, const void *base, size_t len)
 {
+  assert(base);
   assert(len == 0);
   evnet_socket_write_simple(socket, "BYE", 3);
   printf("server wrote bye\n");
@@ -254,6 +259,8 @@ static evnet_socket*
 connint_on_server_connection(evnet_server *_server, struct sockaddr *addr, socklen_t len)
 {
   assert(_server == &server);
+  assert(len > 0);
+  assert(addr);
 
   evnet_socket *socket = malloc(sizeof(evnet_socket));
   evnet_socket_init(socket, CONNINT_TIMEOUT);
