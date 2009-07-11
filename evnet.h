@@ -184,37 +184,39 @@ struct evnet_socket {
   void *data;
 };
 
-#define evnet_queue_init(q)             \
-do {                                    \
-  (q)->prev = q;                        \
-  (q)->next = q;                        \
-} while (0)
+EV_INLINE void
+evnet_queue_init (evnet_queue *q)
+{
+  q->prev = q;
+  q->next = q;
+}
+
+EV_INLINE void
+evnet_queue_insert_head (evnet_queue *h, evnet_queue *x)
+{
+  (x)->next = (h)->next;
+  (x)->next->prev = x;
+  (x)->prev = h;
+  (h)->next = x;
+}
+
+EV_INLINE void
+evnet_queue_remove (evnet_queue *x)
+{
+  (x)->next->prev = (x)->prev;
+  (x)->prev->next = (x)->next;
+#ifndef NDEBUG
+  (x)->prev = NULL;
+  (x)->next = NULL;
+#endif
+}
 
 #define evnet_queue_empty(h) (h == (h)->prev)
-
 #define evnet_queue_head(h) (h)->next
-
-#define evnet_queue_insert_head(h, x)   \
-do {                                    \
-  (x)->next = (h)->next;                \
-  (x)->next->prev = x;                  \
-  (x)->prev = h;                        \
-  (h)->next = x;                        \
-} while (0)
-
-
 #define evnet_queue_last(h) (h)->prev
-
-#define evnet_queue_remove(x)           \
-do {                                    \
-  (x)->next->prev = (x)->prev;          \
-  (x)->prev->next = (x)->next;          \
-  (x)->prev = NULL;                     \
-  (x)->next = NULL;                     \
-} while (0)
-
 #define evnet_queue_data(q, type, link) \
     (type *) ((unsigned char *) q - offsetof(type, link))
+
 
 #ifdef __cplusplus
 }

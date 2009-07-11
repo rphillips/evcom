@@ -9,7 +9,7 @@ EVDIR=$(HOME)/local/libev
 GNUTLSDIR=/usr
 
 # CFLAGS and LDFLAGS are for the users to override from the command line.
-CFLAGS	= -g -I. -Wall -Werror -Wextra
+CFLAGS	= -g -I. -Wall -Werror -Wextra #-DNDEBUG=1
 LDFLAGS	= 
 
 CC = gcc
