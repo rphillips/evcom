@@ -588,7 +588,7 @@ on_connection (EV_P_ ev_io *watcher, int revents)
 
   evnet_socket *socket = NULL;
   if (server->on_connection)
-    socket = server->on_connection(server, (struct sockaddr*)&address, addr_len);
+    socket = server->on_connection(server, (struct sockaddr*)&address);
 
   if (socket == NULL) {
     close(fd);

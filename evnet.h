@@ -136,8 +136,8 @@ struct evnet_server {
   ev_io connection_watcher;
 
   /* public */
-  evnet_socket* (*on_connection) (evnet_server *, struct sockaddr *remote_addr, socklen_t remove_addr_len);
-  void       (*on_error)      (evnet_server *);
+  evnet_socket* (*on_connection) (evnet_server *, struct sockaddr *remote_addr);
+  void          (*on_error)      (evnet_server *);
   void *data;
 };
 

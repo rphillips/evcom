@@ -135,11 +135,10 @@ pingpong_on_client_close(evnet_socket *socket)
 }
 
 static evnet_socket* 
-pingpong_on_server_connection (evnet_server *_server, struct sockaddr *addr, socklen_t len)
+pingpong_on_server_connection (evnet_server *_server, struct sockaddr *addr)
 {
   assert(_server == &server);
   assert(addr);
-  assert(len > 0);
 
   evnet_socket *socket = malloc(sizeof(evnet_socket));
   evnet_socket_init(socket, PINGPONG_TIMEOUT);
@@ -256,10 +255,9 @@ connint_on_peer_drain(evnet_socket *socket)
 }
 
 static evnet_socket* 
-connint_on_server_connection(evnet_server *_server, struct sockaddr *addr, socklen_t len)
+connint_on_server_connection(evnet_server *_server, struct sockaddr *addr)
 {
   assert(_server == &server);
-  assert(len > 0);
   assert(addr);
 
   evnet_socket *socket = malloc(sizeof(evnet_socket));

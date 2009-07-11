@@ -53,11 +53,10 @@ on_peer_read(evnet_socket *socket, const void *base, size_t len)
 }
 
 static evnet_socket* 
-on_server_connection(evnet_server *server, struct sockaddr *addr, socklen_t len)
+on_server_connection(evnet_server *server, struct sockaddr *addr)
 {
   assert(server);
   assert(addr);
-  assert(len > 0);
 
   evnet_socket *socket = malloc(sizeof(evnet_socket));
   evnet_socket_init(socket, TIMEOUT);
