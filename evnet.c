@@ -612,7 +612,7 @@ on_connection (EV_P_ ev_io *watcher, int revents)
 }
 
 int
-evnet_server_listen(evnet_server *server, struct addrinfo *addrinfo)
+evnet_server_listen(evnet_server *server, struct addrinfo *addrinfo, int backlog)
 {
   int fd = -1;
   assert(server->listening == FALSE);
@@ -648,7 +648,7 @@ evnet_server_listen(evnet_server *server, struct addrinfo *addrinfo)
     return -1;
   }
   
-  if (listen(fd, server->backlog) < 0) {
+  if (listen(fd, backlog) < 0) {
     perror("listen()");
     close(fd);
     return -1;
@@ -697,9 +697,8 @@ evnet_server_detach (evnet_server *server)
 }
 
 void 
-evnet_server_init(evnet_server *server, int backlog)
+evnet_server_init(evnet_server *server)
 {
-  server->backlog = backlog;
   server->attached = FALSE;
   server->listening = FALSE;
   server->fd = -1;
@@ -837,7 +836,8 @@ evnet_socket_init(evnet_socket *socket, float timeout)
   socket->read_action = NULL;
   socket->write_action = NULL;
 
-  socket->chunksize = TCP_MAXWIN; 
+  socket->chunksize = 8192; 
+
   socket->on_connect = NULL;
   socket->on_read = NULL;
   socket->on_drain = NULL;

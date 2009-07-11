@@ -47,8 +47,8 @@ typedef struct evnet_buf     evnet_buf;
 typedef struct evnet_server  evnet_server;
 typedef struct evnet_socket  evnet_socket;
 
-void evnet_server_init          (evnet_server *, int backlog);
- int evnet_server_listen        (evnet_server *, struct addrinfo *addrinfo);
+void evnet_server_init          (evnet_server *);
+ int evnet_server_listen        (evnet_server *, struct addrinfo *addrinfo, int backlog);
 void evnet_server_attach        (EV_P_ evnet_server *);
 void evnet_server_detach        (evnet_server *);
 void evnet_server_close         (evnet_server *);  // synchronous
@@ -126,7 +126,6 @@ struct evnet_buf {
 struct evnet_server {
   /* read only */
   int fd;
-  int backlog;
 #if EV_MULTIPLICITY
   struct ev_loop *loop;
 #endif

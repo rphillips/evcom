@@ -77,7 +77,7 @@ main(int argc, const char *argv[])
   //printf("sizeof(evnet_server): %d\n", sizeof(evnet_server));
   //printf("sizeof(evnet_socket): %d\n", sizeof(evnet_socket));
 
-  evnet_server_init(&server, 10);
+  evnet_server_init(&server);
   server.on_connection = on_server_connection;
 
   struct addrinfo *servinfo;
@@ -89,7 +89,7 @@ main(int argc, const char *argv[])
   r = getaddrinfo(NULL, PORT, &hints, &servinfo);
   assert(r == 0);
 
-  r = evnet_server_listen(&server, servinfo);
+  r = evnet_server_listen(&server, servinfo, 10);
   assert(r == 0);
   evnet_server_attach(EV_DEFAULT_ &server);
 

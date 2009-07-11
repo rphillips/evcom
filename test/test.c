@@ -200,10 +200,10 @@ pingpong (struct addrinfo *servinfo)
   printf("sizeof(evnet_server): %d\n", sizeof(evnet_server));
   printf("sizeof(evnet_socket): %d\n", sizeof(evnet_socket));
 
-  evnet_server_init(&server, 10);
+  evnet_server_init(&server);
   server.on_connection = pingpong_on_server_connection;
 
-  r = evnet_server_listen(&server, servinfo);
+  r = evnet_server_listen(&server, servinfo, 10);
   assert(r == 0);
   evnet_server_attach(EV_DEFAULT_ &server);
 
@@ -318,11 +318,11 @@ connint (struct addrinfo *servinfo)
 
   nconnections = 0;
 
-  evnet_server_init(&server, 1000);
+  evnet_server_init(&server);
   server.on_connection = connint_on_server_connection;
 
 
-  evnet_server_listen(&server, servinfo);
+  evnet_server_listen(&server, servinfo, 1000);
   evnet_server_attach(EV_DEFAULT_ &server);
 
   evnet_socket clients[NCONN];
