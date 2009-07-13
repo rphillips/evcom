@@ -18,10 +18,10 @@
 #define SOCKFILE "/tmp/oi.sock"
 #define PORT "5000"
 
-int nconnections; 
+static int nconnections; 
 
 static void 
-on_peer_close(evnet_socket *socket)
+on_peer_close (evnet_socket *socket)
 {
   assert(socket->errorno == 0);
   //printf("server connection closed\n");
@@ -41,19 +41,16 @@ on_peer_timeout (evnet_socket *socket)
 // timeout must match the timeout in timeout.rb
 #define TIMEOUT 5.0
 
-int successful_ping_count; 
-
 static void 
-on_peer_read(evnet_socket *socket, const void *base, size_t len)
+on_peer_read (evnet_socket *socket, const void *base, size_t len)
 {
-  if(len == 0) 
-    return;
+  if(len == 0) return;
 
   evnet_socket_write_simple(socket, base, len);
 }
 
 static evnet_socket* 
-on_server_connection(evnet_server *server, struct sockaddr *addr)
+on_server_connection (evnet_server *server, struct sockaddr *addr)
 {
   assert(server);
   assert(addr);
@@ -73,7 +70,7 @@ on_server_connection(evnet_server *server, struct sockaddr *addr)
 }
 
 int 
-main(void)
+main (void)
 {
   int r;
   evnet_server server;

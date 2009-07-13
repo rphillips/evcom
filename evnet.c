@@ -86,10 +86,9 @@ evnet_buf *
 evnet_buf_new2 (size_t len)
 {
   evnet_buf *buf = malloc(sizeof(evnet_buf));
-  if(!buf) 
-    return NULL;
+  if (!buf) return NULL;
   buf->base = malloc(len);
-  if(!buf->base) {
+  if (!buf->base) {
     free(buf);
     return NULL; 
   }
@@ -102,9 +101,9 @@ evnet_buf *
 evnet_buf_new (const char *base, size_t len)
 {
   evnet_buf *buf = evnet_buf_new2(len);
-  if(!buf) 
-    return NULL;
+  if (!buf) return NULL;
   memcpy(buf->base, base, len);
+
   return buf;
 }
 
@@ -114,13 +113,13 @@ evnet_buf_new (const char *base, size_t len)
 } while (0)
 
 static int 
-full_close(evnet_socket *socket)
+full_close (evnet_socket *socket)
 {
   //printf("close(%d)\n", socket->fd);
   if (close(socket->fd) == -1) {
-    if (errno == EINTR)
+    if (errno == EINTR) {
       return AGAIN;
-    else {
+    } else {
       socket->errorno = errno;
       return ERROR;
     }
@@ -129,11 +128,12 @@ full_close(evnet_socket *socket)
   socket->read_action = NULL;
   socket->write_action = NULL;
   socket->fd = -1;
+
   return OKAY;
 }
 
 static int 
-half_close(evnet_socket *socket)
+half_close (evnet_socket *socket)
 {
   int r = shutdown(socket->fd, SHUT_WR);
   if (r == -1) {
@@ -164,8 +164,9 @@ change_state_for_empty_out_stream (evnet_socket *socket)
    * a very complicated bunch of close logic!
    * XXX this is awful. FIXME
    */
-  if (socket->write_action == full_close || socket->read_action == full_close)
+  if (socket->write_action == full_close || socket->read_action == full_close) {
     return;
+  }
 
   if (socket->got_half_close == FALSE) {
     if (socket->got_full_close == FALSE) {
@@ -173,28 +174,31 @@ change_state_for_empty_out_stream (evnet_socket *socket)
       ev_io_stop(SOCKET_LOOP_ &socket->write_watcher);
     } else {
       /* Got Full Close. */
-      if (socket->read_action)
+      if (socket->read_action) {
 #if EVNET_HAVE_GNUTLS
         socket->read_action = socket->secure ? secure_full_goodbye : full_close;
 #else 
         socket->read_action = full_close;
 #endif
+      }
 
-      if (socket->write_action)
+      if (socket->write_action) {
 #if EVNET_HAVE_GNUTLS
         socket->write_action = socket->secure ? secure_full_goodbye : full_close;
 #else 
         socket->write_action = full_close;
 #endif
+      }
     }
   } else {
     /* Got Half Close. */
-    if (socket->write_action)
+    if (socket->write_action) {
 #if EVNET_HAVE_GNUTLS
       socket->write_action = socket->secure ? secure_half_goodbye : half_close;
 #else 
       socket->write_action = half_close;
 #endif
+    }
   }
 }
 
@@ -223,12 +227,12 @@ update_write_buffer_after_send (evnet_socket *socket, ssize_t sent)
 }
 
 #if EVNET_HAVE_GNUTLS
-static int secure_socket_send(evnet_socket *socket);
-static int secure_socket_recv(evnet_socket *socket);
+static int secure_socket_send (evnet_socket *socket);
+static int secure_socket_recv (evnet_socket *socket);
 
 /* TODO can this be done without ignoring SIGPIPE?  */
 static ssize_t 
-nosigpipe_push(gnutls_transport_ptr_t data, const void *buf, size_t len)
+nosigpipe_push (gnutls_transport_ptr_t data, const void *buf, size_t len)
 {
   evnet_socket *socket = (evnet_socket*)data;
   assert(socket->secure);
@@ -249,7 +253,7 @@ nosigpipe_push(gnutls_transport_ptr_t data, const void *buf, size_t len)
 }
 
 static int
-secure_handshake(evnet_socket *socket)
+secure_handshake (evnet_socket *socket)
 {
   assert(socket->secure);
 
@@ -270,17 +274,19 @@ secure_handshake(evnet_socket *socket)
     if (socket->on_connect) socket->on_connect(socket);
   }
 
-  if (socket->read_action == secure_handshake)
+  if (socket->read_action == secure_handshake) {
     socket->read_action = secure_socket_recv;
- 
-  if (socket->write_action == secure_handshake)
+  } 
+
+  if (socket->write_action == secure_handshake) {
     socket->write_action = secure_socket_send;
+  }
 
   return OKAY;
 }
 
 static int
-secure_socket_send(evnet_socket *socket)
+secure_socket_send (evnet_socket *socket)
 {
   ssize_t sent;
 
@@ -294,18 +300,16 @@ secure_socket_send(evnet_socket *socket)
 
   assert(socket->secure);
 
-  sent = gnutls_record_send( socket->session
-                           , to_write->base + to_write->written
-                           , to_write->len - to_write->written
-                           ); 
+  sent = gnutls_record_send(socket->session,
+    to_write->base + to_write->written,
+    to_write->len - to_write->written); 
 
   if (gnutls_error_is_fatal(sent)) {
     socket->gnutls_errorno = sent;
     return ERROR;
   }
 
-  if (sent == 0)
-    return AGAIN;
+  if (sent == 0) return AGAIN;
 
   evnet_socket_reset_timeout(socket);
 
@@ -326,7 +330,7 @@ secure_socket_send(evnet_socket *socket)
 }
 
 static int
-secure_socket_recv(evnet_socket *socket)
+secure_socket_recv (evnet_socket *socket)
 {
   char recv_buffer[socket->chunksize];
   size_t recv_buffer_size = socket->chunksize;
@@ -368,14 +372,16 @@ secure_socket_recv(evnet_socket *socket)
     /* Got EOF */
     if (recved == 0) {
       socket->read_action = NULL;
-      if (socket->write_action == NULL) 
-        CLOSE_ASAP(socket);
+      if (socket->write_action == NULL) CLOSE_ASAP(socket);
     }
 
-    if (socket->write_action) 
+    if (socket->write_action) {
       socket->write_action = secure_socket_send;
+    }
 
-    if (socket->on_read) { socket->on_read(socket, recv_buffer, recved); }
+    if (socket->on_read) {
+      socket->on_read(socket, recv_buffer, recved);
+    }
 
     return OKAY;
   }
@@ -396,8 +402,7 @@ secure_full_goodbye (evnet_socket *socket)
     return ERROR;
   }
 
-  if (r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN)
-    return AGAIN;
+  if (r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN) return AGAIN;
 
   CLOSE_ASAP(socket);
 
@@ -416,11 +421,9 @@ secure_half_goodbye (evnet_socket *socket)
     return ERROR;
   }
 
-  if (r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN)
-    return AGAIN;
+  if (r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN) return AGAIN;
 
-  if (socket->write_action) 
-    socket->write_action = half_close;
+  if (socket->write_action) socket->write_action = half_close;
 
   return OKAY;
 }
@@ -458,11 +461,10 @@ socket_send (evnet_socket *socket)
 
   /* TODO use writev() here */
 
-  sent = send( socket->fd
-             , to_write->base + to_write->written
-             , to_write->len - to_write->written
-             , flags
-             );
+  sent = send(socket->fd,
+    to_write->base + to_write->written,
+    to_write->len - to_write->written,
+    flags);
 
   if (sent < 0) {
     switch (errno) {
@@ -531,12 +533,11 @@ socket_recv (evnet_socket *socket)
   if (recved == 0) {
     evnet_socket_read_stop(socket);
     socket->read_action = NULL;
-    if (socket->write_action == NULL)
-      CLOSE_ASAP(socket);
+    if (socket->write_action == NULL) CLOSE_ASAP(socket);
   }
 
   /* NOTE: EOF is signaled with recved == 0 on callback */
-  if (socket->on_read) { socket->on_read(socket, buf, recved); }
+  if (socket->on_read) socket->on_read(socket, buf, recved);
 
   return OKAY;
 }
@@ -556,10 +557,9 @@ assign_file_descriptor (evnet_socket *socket, int fd)
   if (socket->secure) {
     gnutls_transport_set_lowat(socket->session, 0); 
     gnutls_transport_set_push_function(socket->session, nosigpipe_push);
-    gnutls_transport_set_ptr2 ( socket->session
-                 /* recv */   , (gnutls_transport_ptr_t)fd 
-                 /* send */   , socket 
-                              );
+    gnutls_transport_set_ptr2(socket->session,
+        (gnutls_transport_ptr_t)fd, /* recv */
+        socket); /* send */   
     socket->read_action = secure_handshake;
     socket->write_action = secure_handshake;
   }
@@ -613,8 +613,7 @@ accept_connection (evnet_server *server)
     return NULL;
   }
   
-  int r = set_nonblock(fd);
-  if (r == -1) goto error;
+  if (set_nonblock(fd) != 0) goto error;
   
 #ifdef SO_NOSIGPIPE
   flags = 1;
@@ -660,22 +659,19 @@ on_connection (EV_P_ ev_io *watcher, int revents)
 }
 
 int
-evnet_server_listen(evnet_server *server, struct addrinfo *addrinfo, int backlog)
+evnet_server_listen (evnet_server *server, struct addrinfo *addrinfo, int backlog)
 {
   int fd = -1;
   assert(server->listening == FALSE);
 
-  fd = socket( addrinfo->ai_family
-             , addrinfo->ai_socktype
-             , addrinfo->ai_protocol
-             );
+  fd = socket(addrinfo->ai_family, addrinfo->ai_socktype,
+      addrinfo->ai_protocol);
   if (fd < 0) {
     perror("socket()");
     return -1;
   }
 
-  int r = set_nonblock(fd);
-  if (r == -1) {
+  if (set_nonblock(fd) != 0) {
     perror("set_nonblock()");
     return -1;
   }
@@ -739,21 +735,20 @@ evnet_server_detach (evnet_server *server)
 }
 
 void 
-evnet_server_init(evnet_server *server)
+evnet_server_init (evnet_server *server)
 {
   server->attached = FALSE;
   server->listening = FALSE;
   server->fd = -1;
   server->connection_watcher.data = server;
   ev_init (&server->connection_watcher, on_connection);
-
   server->on_connection = NULL;
   server->on_close = NULL;
 }
 
 /* Internal callback. called by socket->timeout_watcher */
 static void 
-on_timeout(EV_P_ ev_timer *watcher, int revents)
+on_timeout (EV_P_ ev_timer *watcher, int revents)
 {
   evnet_socket *socket = watcher->data;
 
@@ -765,7 +760,7 @@ on_timeout(EV_P_ ev_timer *watcher, int revents)
 
   // printf("on_timeout\n");
 
-  if (socket->on_timeout) { socket->on_timeout(socket); }
+  if (socket->on_timeout) socket->on_timeout(socket);
   // timeout does not automatically kill your connection. you must!
 }
 
@@ -776,7 +771,7 @@ release_write_buffer(evnet_socket *socket)
     evnet_queue *q = evnet_queue_last(&socket->out_stream);
     evnet_buf *buf = evnet_queue_data(q, evnet_buf, queue);
     evnet_queue_remove(q);
-    if (buf->release) { buf->release(buf); }
+    if (buf->release) buf->release(buf);
   }
 }
 
@@ -797,27 +792,29 @@ on_io_event(EV_P_ ev_io *watcher, int revents)
 
   while (have_read_event || have_write_event) {
     /* RECV LOOP - TRY TO CLEAR THE BUFFER */
-    if (socket->read_action == NULL)
+    if (socket->read_action == NULL) {
       have_read_event = FALSE;
-    else { 
+    } else { 
       r = socket->read_action(socket);
 
-      if (r == AGAIN)
+      if (r == AGAIN) {
         have_read_event = FALSE;
-      else if (r == ERROR)
-        CLOSE_ASAP(socket);
+      } else { 
+        if (r == ERROR) CLOSE_ASAP(socket);
+      }
     }
 
     /* SEND LOOP - TRY TO CLEAR THE BUFFER */
-    if (socket->write_action == NULL)
+    if (socket->write_action == NULL) {
       have_write_event = FALSE;
-    else {
+    } else {
       r = socket->write_action(socket);
 
-      if (r == AGAIN)
+      if (r == AGAIN) {
         have_write_event = FALSE;
-      else if (r == ERROR)
-        CLOSE_ASAP(socket);
+      } else {
+        if (r == ERROR) CLOSE_ASAP(socket);
+      }
     }
   }
 
@@ -832,7 +829,7 @@ on_io_event(EV_P_ ev_io *watcher, int revents)
     evnet_socket_detach(socket);
     assert(socket->fd == -1);
 
-    if (socket->on_close) { socket->on_close(socket); }
+    if (socket->on_close) socket->on_close(socket);
     /* WARNING: user can free socket in on_close so no more 
      * access beyond this point. */
   }
@@ -846,7 +843,7 @@ on_io_event(EV_P_ ev_io *watcher, int revents)
  *   gnutls_db_set_ptr (socket->session, _);
  */
 void 
-evnet_socket_init(evnet_socket *socket, float timeout)
+evnet_socket_init (evnet_socket *socket, float timeout)
 {
   socket->fd = -1;
   socket->server = NULL;
@@ -858,7 +855,7 @@ evnet_socket_init(evnet_socket *socket, float timeout)
 
   evnet_queue_init(&socket->out_stream);
 
-  ev_init (&socket->write_watcher, on_io_event);
+  ev_init(&socket->write_watcher, on_io_event);
   socket->write_watcher.data = socket;
 
   ev_init(&socket->read_watcher, on_io_event);
@@ -893,16 +890,18 @@ void
 evnet_socket_close (evnet_socket *socket)
 {
   socket->got_half_close = TRUE;
-  if (evnet_queue_empty(&socket->out_stream))
+  if (evnet_queue_empty(&socket->out_stream)) {
     change_state_for_empty_out_stream(socket);
+  }
 }
 
 void 
 evnet_socket_full_close (evnet_socket *socket)
 {
   socket->got_full_close = TRUE;
-  if (evnet_queue_empty(&socket->out_stream))
+  if (evnet_queue_empty(&socket->out_stream)) {
     change_state_for_empty_out_stream(socket);
+  }
 }
 
 void evnet_socket_force_close (evnet_socket *socket)
@@ -914,19 +913,16 @@ void evnet_socket_force_close (evnet_socket *socket)
   ev_clear_pending (SOCKET_LOOP_ &socket->timeout_watcher);
 
   socket->write_action = socket->read_action = NULL;
-  // socket->errorno = OI_SOCKET_ERROR_FORCE_CLOSE
-  //
+  // socket->errorno = EVNET_SOCKET_ERROR_FORCE_CLOSE
   
-  if (socket->fd > 0) {
-    close(socket->fd);
-  }
+  if (socket->fd > 0) close(socket->fd);
   socket->fd = -1;
 
   evnet_socket_detach(socket);
 }
 
 void 
-evnet_socket_write(evnet_socket *socket, evnet_buf *buf)
+evnet_socket_write (evnet_socket *socket, evnet_buf *buf)
 {
   if (socket->write_action == NULL) {
     assert(0 && "Do not write to a closed socket"); 
@@ -950,13 +946,13 @@ error:
 }
 
 void 
-evnet_socket_reset_timeout(evnet_socket *socket)
+evnet_socket_reset_timeout (evnet_socket *socket)
 {
   ev_timer_again(SOCKET_LOOP_ &socket->timeout_watcher);
 }
 
 static void
-free_simple_buf ( evnet_buf *buf )
+free_simple_buf (evnet_buf *buf)
 {
   free(buf->base);
   free(buf);
@@ -966,7 +962,7 @@ free_simple_buf ( evnet_buf *buf )
  * NOTE: Allocates memory. Avoid for performance applications.
  */ 
 void
-evnet_socket_write_simple(evnet_socket *socket, const char *str, size_t len)
+evnet_socket_write_simple (evnet_socket *socket, const char *str, size_t len)
 {
   evnet_buf *buf = malloc(sizeof(evnet_buf));
   buf->release = free_simple_buf;
@@ -977,7 +973,7 @@ evnet_socket_write_simple(evnet_socket *socket, const char *str, size_t len)
 }
 
 void
-evnet_socket_attach(EV_P_ evnet_socket *socket)
+evnet_socket_attach (EV_P_ evnet_socket *socket)
 {
 #if EV_MULTIPLICITY
   socket->loop = loop;
@@ -986,15 +982,17 @@ evnet_socket_attach(EV_P_ evnet_socket *socket)
 
   ev_timer_again(EV_A_ &socket->timeout_watcher);
 
-  if (socket->read_action) 
+  if (socket->read_action) {
     ev_io_start(EV_A_ &socket->read_watcher);
+  }
 
-  if (socket->write_action) 
+  if (socket->write_action) {
     ev_io_start(EV_A_ &socket->write_watcher);
+  }
 }
 
 void
-evnet_socket_detach(evnet_socket *socket)
+evnet_socket_detach (evnet_socket *socket)
 {
   if (socket->attached) {
     ev_io_stop(SOCKET_LOOP_ &socket->write_watcher);
@@ -1011,7 +1009,7 @@ void
 evnet_socket_read_stop (evnet_socket *socket)
 {
   ev_io_stop(SOCKET_LOOP_ &socket->read_watcher);
-  ev_clear_pending (SOCKET_LOOP_ &socket->read_watcher);
+  ev_clear_pending(SOCKET_LOOP_ &socket->read_watcher);
 }
 
 void
@@ -1024,12 +1022,10 @@ evnet_socket_read_start (evnet_socket *socket)
 }
 
 int
-evnet_socket_connect(evnet_socket *s, struct addrinfo *addrinfo)
+evnet_socket_connect (evnet_socket *s, struct addrinfo *addrinfo)
 {
-  int fd = socket( addrinfo->ai_family
-                 , addrinfo->ai_socktype
-                 , addrinfo->ai_protocol
-                 );
+  int fd = socket(addrinfo->ai_family, addrinfo->ai_socktype,
+      addrinfo->ai_protocol);
   if (fd < 0) {
     perror("socket()");
     return -1;
@@ -1046,10 +1042,7 @@ evnet_socket_connect(evnet_socket *s, struct addrinfo *addrinfo)
   setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &flags, sizeof(flags));
 #endif
 
-  r = connect( fd
-             , addrinfo->ai_addr
-             , addrinfo->ai_addrlen
-             );
+  r = connect(fd, addrinfo->ai_addr, addrinfo->ai_addrlen);
 
   if (r < 0 && errno != EINPROGRESS) {
     perror("connect");

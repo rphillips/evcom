@@ -43,7 +43,7 @@ common_on_server_close (evnet_server *server, int errorno)
 }
 
 static void 
-common_on_peer_close(evnet_socket *socket)
+common_on_peer_close (evnet_socket *socket)
 {
   assert(socket->errorno == 0);
   printf("server connection closed\n");
@@ -55,14 +55,14 @@ common_on_peer_close(evnet_socket *socket)
 }
 
 static void 
-common_on_client_timeout(evnet_socket *socket)
+common_on_client_timeout (evnet_socket *socket)
 {
   assert(socket);
   printf("client connection timeout\n");
 }
 
 static void 
-common_on_peer_timeout(evnet_socket *socket)
+common_on_peer_timeout (evnet_socket *socket)
 {
   assert(socket);
   fprintf(stderr, "peer connection timeout\n");
@@ -71,11 +71,11 @@ common_on_peer_timeout(evnet_socket *socket)
 
 #if EVNET_HAVE_GNUTLS
 #define DH_BITS 768
-gnutls_anon_server_credentials_t server_credentials;
+static gnutls_anon_server_credentials_t server_credentials;
 const int kx_prio[] = { GNUTLS_KX_ANON_DH, 0 };
 static gnutls_dh_params_t dh_params;
 
-void anon_tls_server(evnet_socket *socket)
+void anon_tls_server (evnet_socket *socket)
 {
   gnutls_session_t session;
   socket->data = session;
@@ -90,17 +90,17 @@ void anon_tls_server(evnet_socket *socket)
   evnet_socket_set_secure_session(socket, session);
 }
 
-void anon_tls_client(evnet_socket *socket)
+void anon_tls_client (evnet_socket *socket)
 {
   gnutls_session_t client_session;
   gnutls_anon_client_credentials_t client_credentials;
 
   gnutls_anon_allocate_client_credentials (&client_credentials);
-  gnutls_init (&client_session, GNUTLS_CLIENT);
+  gnutls_init(&client_session, GNUTLS_CLIENT);
   gnutls_set_default_priority(client_session);
   gnutls_kx_set_priority(client_session, kx_prio);
   /* Need to enable anonymous KX specifically. */
-  gnutls_credentials_set (client_session, GNUTLS_CRD_ANON, client_credentials);
+  gnutls_credentials_set(client_session, GNUTLS_CRD_ANON, client_credentials);
 
   evnet_socket_set_secure_session(socket, client_session);
   assert(socket->secure);
@@ -117,10 +117,10 @@ void anon_tls_client(evnet_socket *socket)
 #define EXCHANGES 5000
 #define PINGPONG_TIMEOUT 5.0
 
-int successful_ping_count; 
+static int successful_ping_count; 
 
 static void 
-pingpong_on_peer_read(evnet_socket *socket, const void *base, size_t len)
+pingpong_on_peer_read (evnet_socket *socket, const void *base, size_t len)
 {
   if (len == 0) {
     evnet_socket_close(socket);
@@ -136,7 +136,7 @@ pingpong_on_peer_read(evnet_socket *socket, const void *base, size_t len)
 }
 
 static void 
-pingpong_on_client_close(evnet_socket *socket)
+pingpong_on_client_close (evnet_socket *socket)
 {
   assert(socket);
   printf("client connection closed\n");
@@ -289,14 +289,14 @@ connint_on_server_connection(evnet_server *_server, struct sockaddr *addr)
 }
 
 static void 
-connint_on_client_connect(evnet_socket *socket)
+connint_on_client_connect (evnet_socket *socket)
 {
   printf("on client connection\n");
   evnet_socket_close(socket);
 }
 
 static void 
-connint_on_client_close(evnet_socket *socket)
+connint_on_client_close (evnet_socket *socket)
 {
   evnet_socket_close(socket); // already closed, but it shouldn't crash if we try to do it again
 
@@ -311,7 +311,7 @@ connint_on_client_close(evnet_socket *socket)
 }
 
 static void 
-connint_on_client_read(evnet_socket *socket, const void *base, size_t len)
+connint_on_client_read (evnet_socket *socket, const void *base, size_t len)
 {
   if (len == 0) {
     evnet_socket_close(socket);
@@ -371,7 +371,7 @@ connint (struct addrinfo *servinfo)
 
 
 struct addrinfo *
-create_tcp_address ( )
+create_tcp_address (void)
 {
   struct addrinfo *servinfo;
   int r = getaddrinfo(NULL, PORT, &tcp_hints, &servinfo);
@@ -387,7 +387,7 @@ free_tcp_address (struct addrinfo *servinfo)
 
 
 struct addrinfo *
-create_unix_address ( )
+create_unix_address (void)
 {
   struct addrinfo *servinfo;
   struct stat tstat;
