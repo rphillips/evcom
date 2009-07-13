@@ -132,12 +132,20 @@ struct evnet_server {
   unsigned attached:1;
   unsigned listening:1;
 
-  /* private */
+  /* PRIVATE */
   ev_io connection_watcher;
 
-  /* public */
+  /* PUBLIC */
+
   evnet_socket* (*on_connection) (evnet_server *, struct sockaddr *remote_addr);
-  void          (*on_error)      (evnet_server *);
+
+  /* Executed when a server is closed. 
+   * If evnet_server_close() was called errorno will be 0.
+   * An libev error is indicated with errorno == 1
+   * Otherwise errorno is a stdlib errno from a system call, e.g. accept()
+   */
+  void (*on_close) (evnet_server *, int errorno);
+
   void *data;
 };
 

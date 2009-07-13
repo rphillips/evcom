@@ -30,8 +30,17 @@ static const struct addrinfo tcp_hints =
 #define PORT "5000"
 
 static evnet_server server;
-int nconnections; 
-int use_tls;
+static int nconnections; 
+static int use_tls;
+static int got_server_close;
+
+static void
+common_on_server_close (evnet_server *server, int errorno)
+{
+  assert(server);
+  assert(errorno == 0);
+  got_server_close = 1;
+}
 
 static void 
 common_on_peer_close(evnet_socket *socket)
@@ -199,12 +208,14 @@ pingpong (struct addrinfo *servinfo)
   
   successful_ping_count = 0;
   nconnections = 0;
+  got_server_close = 0;
 
   printf("sizeof(evnet_server): %d\n", sizeof(evnet_server));
   printf("sizeof(evnet_socket): %d\n", sizeof(evnet_socket));
 
   evnet_server_init(&server);
   server.on_connection = pingpong_on_server_connection;
+  server.on_close = common_on_server_close;
 
   r = evnet_server_listen(&server, servinfo, 10);
   assert(r == 0);
@@ -229,6 +240,7 @@ pingpong (struct addrinfo *servinfo)
   printf("successful_ping_count = %d\n", successful_ping_count);
   assert(successful_ping_count == EXCHANGES + 1);
   assert(nconnections == 1);
+  assert(got_server_close);
 
   return 0;
 }
@@ -322,9 +334,11 @@ connint (struct addrinfo *servinfo)
   int r;
 
   nconnections = 0;
+  got_server_close = 0;
 
   evnet_server_init(&server);
   server.on_connection = connint_on_server_connection;
+  server.on_close = common_on_server_close;
 
 
   evnet_server_listen(&server, servinfo, 1000);
@@ -350,6 +364,7 @@ connint (struct addrinfo *servinfo)
   ev_loop(EV_DEFAULT_ 0);
 
   assert(nconnections == NCONN);
+  assert(got_server_close);
 
   return 0;
 }

@@ -566,6 +566,22 @@ assign_file_descriptor (evnet_socket *socket, int fd)
 #endif 
 }
 
+static void
+server_close_with_error (evnet_server *server, int errorno)
+{
+  if (server->listening) {
+    evnet_server_detach(server);
+    close(server->fd); /* TODO do this on the loop? check return value? */
+    server->fd = -1;
+    server->listening = FALSE;
+
+    if (server->on_close) {
+      server->on_close(server, errorno);
+    }
+  }
+}
+
+
 /* Retruns evnet_socket if a connection could be accepted. 
  * The returned socket is not yet attached to the event loop.
  * Otherwise NULL
@@ -612,7 +628,7 @@ accept_connection (evnet_server *server)
   return socket;
 
 error:
-  perror("accept connection error.");
+  server_close_with_error(server, errno);
   return NULL;
 }
 
@@ -632,7 +648,7 @@ on_connection (EV_P_ ev_io *watcher, int revents)
   assert(&server->connection_watcher == watcher);
   
   if (EV_ERROR & revents) {
-    evnet_server_close(server);
+    server_close_with_error(server, 1);
     return;
   }
 
@@ -697,14 +713,9 @@ evnet_server_listen(evnet_server *server, struct addrinfo *addrinfo, int backlog
  * existing connections.
  */
 void 
-evnet_server_close(evnet_server *server)
+evnet_server_close (evnet_server *server)
 {
-  if (server->listening) {
-    evnet_server_detach(server);
-    close(server->fd);
-    /* TODO do this on the loop? check return value? */
-    server->listening = FALSE;
-  }
+  server_close_with_error(server, 0);
 }
 
 void
@@ -737,8 +748,7 @@ evnet_server_init(evnet_server *server)
   ev_init (&server->connection_watcher, on_connection);
 
   server->on_connection = NULL;
-  server->on_error = NULL;
-  server->data = NULL;
+  server->on_close = NULL;
 }
 
 /* Internal callback. called by socket->timeout_watcher */
