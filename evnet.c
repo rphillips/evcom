@@ -63,6 +63,18 @@ static int secure_half_goodbye (evnet_socket *socket);
 #define AGAIN 1
 #define ERROR 2 
 
+EV_INLINE int
+set_nonblock (int fd)
+{
+  int flags = fcntl(fd, F_GETFL, 0);
+  if (flags == -1) return -1;
+
+  int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+  if (r == -1) return -1;
+
+  return 0;
+}
+
 void
 evnet_buf_destroy (evnet_buf *buf)
 {
@@ -554,6 +566,56 @@ assign_file_descriptor (evnet_socket *socket, int fd)
 #endif 
 }
 
+/* Retruns evnet_socket if a connection could be accepted. 
+ * The returned socket is not yet attached to the event loop.
+ * Otherwise NULL
+ */
+static evnet_socket*
+accept_connection (evnet_server *server)
+{
+  struct sockaddr address; /* connector's address information */
+  socklen_t addr_len = sizeof(address);
+  
+  int fd = accept(server->fd, (struct sockaddr*)&address, &addr_len);
+  if (fd < 0) {
+#ifdef EWOULDBLOCK
+    if (errno == EWOULDBLOCK) return NULL;
+#else
+    if (errno == EAGAIN) return NULL;
+#endif 
+    goto error;
+  }
+
+  evnet_socket *socket = NULL;
+
+  if (server->on_connection) {
+    socket = server->on_connection(server, (struct sockaddr*)&address);
+  }
+
+  if (socket == NULL) {
+    close(fd);
+    return NULL;
+  }
+  
+  int r = set_nonblock(fd);
+  if (r == -1) goto error;
+  
+#ifdef SO_NOSIGPIPE
+  flags = 1;
+  r = setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &flags, sizeof(flags));
+  if (r < 0) goto error;
+#endif
+
+  socket->server = server;
+  assign_file_descriptor(socket, fd);
+
+  return socket;
+
+error:
+  perror("accept connection error.");
+  return NULL;
+}
+
 
 /* Internal callback 
  * Called by server->connection_watcher.
@@ -562,8 +624,6 @@ static void
 on_connection (EV_P_ ev_io *watcher, int revents)
 {
   evnet_server *server = watcher->data;
-
- // printf("on connection!\n");
 
   assert(server->listening);
 #if EV_MULTIPLICITY
@@ -575,40 +635,12 @@ on_connection (EV_P_ ev_io *watcher, int revents)
     evnet_server_close(server);
     return;
   }
-  
-  struct sockaddr address; /* connector's address information */
-  socklen_t addr_len = sizeof(address);
-  
-  /* TODO accept all possible connections? currently: just one */
-  int fd = accept(server->fd, (struct sockaddr*)&address, &addr_len);
-  if (fd < 0) {
-    perror("accept()");
-    return;
+
+  /* accept as many connections as possible */
+  evnet_socket *socket;
+  while ((socket = accept_connection(server))) {
+    evnet_socket_attach(EV_A_ socket);
   }
-
-  evnet_socket *socket = NULL;
-  if (server->on_connection)
-    socket = server->on_connection(server, (struct sockaddr*)&address);
-
-  if (socket == NULL) {
-    close(fd);
-    return;
-  } 
-  
-  int flags = fcntl(fd, F_GETFL, 0);
-  int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-  if (r < 0) {
-    /* TODO error report */
-  }
-  
-#ifdef SO_NOSIGPIPE
-  flags = 1;
-  setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &flags, sizeof(flags));
-#endif
-
-  socket->server = server;
-  assign_file_descriptor(socket, fd);
-  evnet_socket_attach(EV_A_ socket);
 }
 
 int
@@ -626,14 +658,13 @@ evnet_server_listen(evnet_server *server, struct addrinfo *addrinfo, int backlog
     return -1;
   }
 
-  int flags = fcntl(fd, F_GETFL, 0);
-  int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-  if (r < 0) {
-    perror("fcntl()");
+  int r = set_nonblock(fd);
+  if (r == -1) {
+    perror("set_nonblock()");
     return -1;
   }
 
-  flags = 1;
+  int flags = 1;
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *)&flags, sizeof(flags));
   setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&flags, sizeof(flags));
 
@@ -994,10 +1025,9 @@ evnet_socket_connect(evnet_socket *s, struct addrinfo *addrinfo)
     return -1;
   }
 
-  int flags = fcntl(fd, F_GETFL, 0);
-  int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+  int r = set_nonblock(fd);
   if (r < 0) {
-    perror("fcntl()");
+    perror("set_nonblock()");
     return -1;
   }
       
