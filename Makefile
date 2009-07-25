@@ -23,16 +23,16 @@ endif
 LDFLAGS += -lev
 
 ifdef GNUTLSDIR
-	CFLAGS += -I$(GNUTLSDIR)/include -DEVNET_HAVE_GNUTLS=1
+	CFLAGS += -I$(GNUTLSDIR)/include -DEVCOM_HAVE_GNUTLS=1
 	LDFLAGS += -L$(GNUTLSDIR)/lib
 	LDFLAGS += -lgnutls
 endif
 
-DEP = evnet.h
-SRC = evnet.c
+DEP = evcom.h
+SRC = evcom.c
 OBJ = ${SRC:.c=.o}
 
-NAME=libevnet
+NAME=libevcom
 OUTPUT_A=$(NAME).a
 
 all: $(OUTPUT_A) 
