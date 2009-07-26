@@ -107,11 +107,6 @@ evcom_buf_new (const char *base, size_t len)
   return buf;
 }
 
-#define CLOSE_ASAP(socket) do {         \
-  (socket)->read_action = full_close;   \
-  (socket)->write_action = full_close;  \
-} while (0)
-
 static int 
 full_close (evcom_socket *socket)
 {
@@ -130,6 +125,13 @@ full_close (evcom_socket *socket)
   socket->fd = -1;
 
   return OKAY;
+}
+
+static inline void
+close_asap (evcom_socket *socket)
+{
+  socket->read_action = full_close;
+  socket->write_action = full_close;
 }
 
 static int 
@@ -373,7 +375,7 @@ secure_socket_recv (evcom_socket *socket)
     /* Got EOF */
     if (recved == 0) {
       socket->read_action = NULL;
-      if (socket->write_action == NULL) CLOSE_ASAP(socket);
+      if (socket->write_action == NULL) close_asap(socket);
     }
 
     if (socket->write_action) {
@@ -405,7 +407,7 @@ secure_full_goodbye (evcom_socket *socket)
 
   if (r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN) return AGAIN;
 
-  CLOSE_ASAP(socket);
+  close_asap(socket);
 
   return OKAY;
 }
@@ -534,7 +536,7 @@ socket_recv (evcom_socket *socket)
   if (recved == 0) {
     evcom_socket_read_stop(socket);
     socket->read_action = NULL;
-    if (socket->write_action == NULL) CLOSE_ASAP(socket);
+    if (socket->write_action == NULL) close_asap(socket);
   }
 
   /* NOTE: EOF is signaled with recved == 0 on callback */
@@ -784,7 +786,7 @@ on_io_event(EV_P_ ev_io *watcher, int revents)
 
   if (revents & EV_ERROR) {
     socket->errorno = 1;
-    CLOSE_ASAP(socket);
+    close_asap(socket);
   }
 
   int r;
@@ -801,7 +803,7 @@ on_io_event(EV_P_ ev_io *watcher, int revents)
       if (r == AGAIN) {
         have_read_event = FALSE;
       } else { 
-        if (r == ERROR) CLOSE_ASAP(socket);
+        if (r == ERROR) close_asap(socket);
       }
     }
 
@@ -814,7 +816,7 @@ on_io_event(EV_P_ ev_io *watcher, int revents)
       if (r == AGAIN) {
         have_write_event = FALSE;
       } else {
-        if (r == ERROR) CLOSE_ASAP(socket);
+        if (r == ERROR) close_asap(socket);
       }
     }
   }
