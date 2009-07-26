@@ -47,6 +47,14 @@ typedef struct evcom_buf     evcom_buf;
 typedef struct evcom_server  evcom_server;
 typedef struct evcom_socket  evcom_socket;
 
+/* flags for socket and server */
+#define EVCOM_ATTACHED          0x0001
+#define EVCOM_LISTENING         0x0002
+#define EVCOM_CONNECTED         0x0004
+#define EVCOM_SECURE            0x0008
+#define EVCOM_GOT_HALF_CLOSE    0x0010
+#define EVCOM_GOT_FULL_CLOSE    0x0020
+
 void evcom_server_init          (evcom_server *);
  int evcom_server_listen        (evcom_server *, struct addrinfo *addrinfo, int backlog);
 void evcom_server_attach        (EV_P_ evcom_server *);
@@ -128,8 +136,7 @@ struct evcom_server {
 #if EV_MULTIPLICITY
   struct ev_loop *loop;
 #endif
-  unsigned attached:1;
-  unsigned listening:1;
+  unsigned flags;
 
   /* PRIVATE */
   ev_io connection_watcher;
@@ -157,11 +164,7 @@ struct evcom_socket {
   evcom_server *server;
   evcom_queue out_stream;
   size_t written;
-  unsigned attached:1;
-  unsigned connected:1;
-  unsigned secure:1;
-  unsigned got_full_close:1;
-  unsigned got_half_close:1;
+  unsigned flags;
 
   /* NULL = that end of the socket is closed. */
   int (*read_action)  (evcom_socket *);

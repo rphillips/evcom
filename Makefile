@@ -6,7 +6,7 @@ EVDIR=$(HOME)/local/libev
 # /foo/bar/include and /foo/bar/lib directories.
 #
 # Comment out the following line to disable TLS
-#GNUTLSDIR=/usr
+GNUTLSDIR=/usr
 
 # CFLAGS and LDFLAGS are for the users to override from the command line.
 CFLAGS	= -g -I. -Wall -Werror -Wextra #-DNDEBUG=1

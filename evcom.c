@@ -63,6 +63,13 @@ static int secure_half_goodbye (evcom_socket *socket);
 #define AGAIN 1
 #define ERROR 2 
 
+#define ATTACHED(s)         ((s)->flags & EVCOM_ATTACHED)
+#define LISTENING(s)        ((s)->flags & EVCOM_LISTENING)
+#define CONNECTED(s)        ((s)->flags & EVCOM_CONNECTED)
+#define SECURE(s)           ((s)->flags & EVCOM_SECURE)
+#define GOT_HALF_CLOSE(s)   ((s)->flags & EVCOM_GOT_HALF_CLOSE)
+#define GOT_FULL_CLOSE(s)   ((s)->flags & EVCOM_GOT_FULL_CLOSE)
+
 EV_INLINE int
 set_nonblock (int fd)
 {
@@ -170,15 +177,15 @@ change_state_for_empty_out_stream (evcom_socket *socket)
     return;
   }
 
-  if (socket->got_half_close == FALSE) {
-    if (socket->got_full_close == FALSE) {
+  if (!GOT_HALF_CLOSE(socket)) {
+    if (!GOT_FULL_CLOSE(socket)) {
       /* Normal situation. Didn't get any close signals. */
       ev_io_stop(SOCKET_LOOP_ &socket->write_watcher);
     } else {
       /* Got Full Close. */
       if (socket->read_action) {
 #if EVCOM_HAVE_GNUTLS
-        socket->read_action = socket->secure ? secure_full_goodbye : full_close;
+        socket->read_action = SECURE(socket) ? secure_full_goodbye : full_close;
 #else 
         socket->read_action = full_close;
 #endif
@@ -186,7 +193,7 @@ change_state_for_empty_out_stream (evcom_socket *socket)
 
       if (socket->write_action) {
 #if EVCOM_HAVE_GNUTLS
-        socket->write_action = socket->secure ? secure_full_goodbye : full_close;
+        socket->write_action = SECURE(socket) ? secure_full_goodbye : full_close;
 #else 
         socket->write_action = full_close;
 #endif
@@ -196,7 +203,7 @@ change_state_for_empty_out_stream (evcom_socket *socket)
     /* Got Half Close. */
     if (socket->write_action) {
 #if EVCOM_HAVE_GNUTLS
-      socket->write_action = socket->secure ? secure_half_goodbye : half_close;
+      socket->write_action = SECURE(socket) ? secure_half_goodbye : half_close;
 #else 
       socket->write_action = half_close;
 #endif
@@ -238,7 +245,7 @@ static ssize_t
 nosigpipe_push (gnutls_transport_ptr_t data, const void *buf, size_t len)
 {
   evcom_socket *socket = (evcom_socket*)data;
-  assert(socket->secure);
+  assert(SECURE(socket));
   int flags = 0;
 #ifdef MSG_NOSIGNAL
   flags |= MSG_NOSIGNAL;
@@ -258,7 +265,7 @@ nosigpipe_push (gnutls_transport_ptr_t data, const void *buf, size_t len)
 static int
 secure_handshake (evcom_socket *socket)
 {
-  assert(socket->secure);
+  assert(SECURE(socket));
 
   int r = gnutls_handshake(socket->session);
 
@@ -272,8 +279,8 @@ secure_handshake (evcom_socket *socket)
 
   evcom_socket_reset_timeout(socket);
 
-  if (!socket->connected) {
-    socket->connected = TRUE;
+  if (!CONNECTED(socket)) {
+    socket->flags |= EVCOM_CONNECTED;
     if (socket->on_connect) socket->on_connect(socket);
   }
 
@@ -301,7 +308,7 @@ secure_socket_send (evcom_socket *socket)
   evcom_queue *q = evcom_queue_last(&socket->out_stream);
   evcom_buf *to_write = evcom_queue_data(q, evcom_buf, queue);
 
-  assert(socket->secure);
+  assert(SECURE(socket));
 
   sent = gnutls_record_send(socket->session,
     to_write->base + to_write->written,
@@ -339,7 +346,7 @@ secure_socket_recv (evcom_socket *socket)
   size_t recv_buffer_size = socket->chunksize;
   ssize_t recved;
 
-  assert(socket->secure);
+  assert(SECURE(socket));
 
   recved = gnutls_record_recv(socket->session, recv_buffer, recv_buffer_size);
 
@@ -396,7 +403,7 @@ secure_socket_recv (evcom_socket *socket)
 static int
 secure_full_goodbye (evcom_socket *socket)
 {
-  assert(socket->secure);
+  assert(SECURE(socket));
 
   int r = gnutls_bye(socket->session, GNUTLS_SHUT_RDWR);
 
@@ -415,7 +422,7 @@ secure_full_goodbye (evcom_socket *socket)
 static int
 secure_half_goodbye (evcom_socket *socket)
 {
-  assert(socket->secure);
+  assert(SECURE(socket));
 
   int r = gnutls_bye(socket->session, GNUTLS_SHUT_WR);
 
@@ -435,7 +442,7 @@ void
 evcom_socket_set_secure_session (evcom_socket *socket, gnutls_session_t session)
 {
   socket->session = session;
-  socket->secure = TRUE;
+  socket->flags |= EVCOM_SECURE;
 }
 #endif /* HAVE GNUTLS */
 
@@ -444,7 +451,7 @@ socket_send (evcom_socket *socket)
 {
   ssize_t sent;
 
-  assert(socket->secure == FALSE);
+  assert(!SECURE(socket));
 
   if (evcom_queue_empty(&socket->out_stream)) {
     ev_io_stop(SOCKET_LOOP_ &socket->write_watcher);
@@ -486,8 +493,8 @@ socket_send (evcom_socket *socket)
 
   evcom_socket_reset_timeout(socket);
 
-  if (!socket->connected) {
-    socket->connected = TRUE;
+  if (!CONNECTED(socket)) {
+    socket->flags |= EVCOM_CONNECTED;
     if (socket->on_connect) socket->on_connect(socket);
   }
 
@@ -503,10 +510,10 @@ socket_recv (evcom_socket *socket)
   size_t buf_size = TCP_MAXWIN;
   ssize_t recved;
 
-  assert(socket->secure == FALSE);
+  assert(!SECURE(socket));
 
-  if (!socket->connected) {
-    socket->connected = TRUE;
+  if (!CONNECTED(socket)) {
+    socket->flags |= EVCOM_CONNECTED;
     if (socket->on_connect) socket->on_connect(socket);
     //return OKAY;
   }
@@ -557,7 +564,7 @@ assign_file_descriptor (evcom_socket *socket, int fd)
   socket->write_action = socket_send;
 
 #if EVCOM_HAVE_GNUTLS
-  if (socket->secure) {
+  if (SECURE(socket)) {
     gnutls_transport_set_lowat(socket->session, 0); 
     gnutls_transport_set_push_function(socket->session, nosigpipe_push);
     gnutls_transport_set_ptr2(socket->session,
@@ -572,11 +579,11 @@ assign_file_descriptor (evcom_socket *socket, int fd)
 static void
 server_close_with_error (evcom_server *server, int errorno)
 {
-  if (server->listening) {
+  if (LISTENING(server)) {
     evcom_server_detach(server);
     close(server->fd); /* TODO do this on the loop? check return value? */
     server->fd = -1;
-    server->listening = FALSE;
+    server->flags &= ~EVCOM_LISTENING;
 
     if (server->on_close) {
       server->on_close(server, errorno);
@@ -643,7 +650,7 @@ on_connection (EV_P_ ev_io *watcher, int revents)
 {
   evcom_server *server = watcher->data;
 
-  assert(server->listening);
+  assert(LISTENING(server));
 #if EV_MULTIPLICITY
   assert(server->loop == loop);
 #endif 
@@ -665,7 +672,7 @@ int
 evcom_server_listen (evcom_server *server, struct addrinfo *addrinfo, int backlog)
 {
   int fd = -1;
-  assert(server->listening == FALSE);
+  assert(!LISTENING(server));
 
   fd = socket(addrinfo->ai_family, addrinfo->ai_socktype,
       addrinfo->ai_protocol);
@@ -701,7 +708,7 @@ evcom_server_listen (evcom_server *server, struct addrinfo *addrinfo, int backlo
   }
   
   server->fd = fd;
-  server->listening = TRUE;
+  server->flags |= EVCOM_LISTENING;
   ev_io_set (&server->connection_watcher, server->fd, EV_READ);
   
   return 0;
@@ -724,7 +731,7 @@ evcom_server_attach (EV_P_ evcom_server *server)
 #if EV_MULTIPLICITY
   server->loop = loop;
 #endif
-  server->attached = TRUE;
+  server->flags |= EVCOM_ATTACHED;
 }
 
 void
@@ -734,14 +741,13 @@ evcom_server_detach (evcom_server *server)
 #if EV_MULTIPLICITY
   server->loop = NULL;
 #endif
-  server->attached = FALSE;
+  server->flags &= ~EVCOM_ATTACHED;
 }
 
 void 
 evcom_server_init (evcom_server *server)
 {
-  server->attached = FALSE;
-  server->listening = FALSE;
+  server->flags = 0;
   server->fd = -1;
   server->connection_watcher.data = server;
   ev_init (&server->connection_watcher, on_connection);
@@ -853,8 +859,7 @@ evcom_socket_init (evcom_socket *socket, float timeout)
 #if EV_MULTIPLICITY
   socket->loop = NULL;
 #endif
-  socket->attached = FALSE;
-  socket->connected = FALSE;
+  socket->flags = 0;
 
   evcom_queue_init(&socket->out_stream);
 
@@ -864,12 +869,8 @@ evcom_socket_init (evcom_socket *socket, float timeout)
   ev_init(&socket->read_watcher, on_io_event);
   socket->read_watcher.data = socket;
 
-  socket->got_full_close = FALSE;
-  socket->got_half_close = FALSE;
-
   socket->errorno = 0;
 
-  socket->secure = FALSE;
 #if EVCOM_HAVE_GNUTLS
   socket->gnutls_errorno = 0;
   socket->session = NULL;
@@ -892,7 +893,7 @@ evcom_socket_init (evcom_socket *socket, float timeout)
 void 
 evcom_socket_close (evcom_socket *socket)
 {
-  socket->got_half_close = TRUE;
+  socket->flags |= EVCOM_GOT_HALF_CLOSE;
   if (evcom_queue_empty(&socket->out_stream)) {
     change_state_for_empty_out_stream(socket);
   }
@@ -901,7 +902,7 @@ evcom_socket_close (evcom_socket *socket)
 void 
 evcom_socket_full_close (evcom_socket *socket)
 {
-  socket->got_full_close = TRUE;
+  socket->flags |= EVCOM_GOT_FULL_CLOSE;
   if (evcom_queue_empty(&socket->out_stream)) {
     change_state_for_empty_out_stream(socket);
   }
@@ -931,7 +932,7 @@ evcom_socket_write (evcom_socket *socket, evcom_buf *buf)
     assert(0 && "Do not write to a closed socket"); 
     goto error;
   }
-  if (socket->got_full_close == TRUE || socket->got_half_close == TRUE) {
+  if (GOT_FULL_CLOSE(socket) || GOT_HALF_CLOSE(socket)) {
     assert(0 && "Do not write to a closing socket");
     goto error;
   }
@@ -939,7 +940,7 @@ evcom_socket_write (evcom_socket *socket, evcom_buf *buf)
   evcom_queue_insert_head(&socket->out_stream, &buf->queue);
   buf->written = 0;
 
-  if (socket->attached) {
+  if (ATTACHED(socket)) {
     ev_io_start(SOCKET_LOOP_ &socket->write_watcher);
   }
   return;
@@ -981,7 +982,7 @@ evcom_socket_attach (EV_P_ evcom_socket *socket)
 #if EV_MULTIPLICITY
   socket->loop = loop;
 #endif 
-  socket->attached = TRUE;
+  socket->flags |= EVCOM_ATTACHED;
 
   ev_timer_again(EV_A_ &socket->timeout_watcher);
 
@@ -997,14 +998,14 @@ evcom_socket_attach (EV_P_ evcom_socket *socket)
 void
 evcom_socket_detach (evcom_socket *socket)
 {
-  if (socket->attached) {
+  if (ATTACHED(socket)) {
     ev_io_stop(SOCKET_LOOP_ &socket->write_watcher);
     ev_io_stop(SOCKET_LOOP_ &socket->read_watcher);
     ev_timer_stop(SOCKET_LOOP_ &socket->timeout_watcher);
 #if EV_MULTIPLICITY
     socket->loop = NULL;
 #endif
-    socket->attached = FALSE;
+    socket->flags &= ~EVCOM_ATTACHED;
   }
 }
 
