@@ -65,7 +65,6 @@ void evcom_socket_read_stop     (evcom_socket *);
 void evcom_socket_reset_timeout (evcom_socket *);
 
 /* Writes a buffer to the socket. 
- * (Do not send a NULL evcom_buf or a buffer with evcom_buf->base == NULL.)
  */
 void evcom_socket_write         (evcom_socket *, evcom_buf *);
 
