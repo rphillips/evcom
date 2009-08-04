@@ -54,6 +54,7 @@ typedef struct evcom_socket  evcom_socket;
 #define EVCOM_SECURE            0x0008
 #define EVCOM_GOT_HALF_CLOSE    0x0010
 #define EVCOM_GOT_FULL_CLOSE    0x0020
+#define EVCOM_TOO_MANY_CONN     0x0040
 
 void evcom_server_init          (evcom_server *);
  int evcom_server_listen        (evcom_server *, struct addrinfo *addrinfo, int backlog);

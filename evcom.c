@@ -69,6 +69,28 @@ static int secure_half_goodbye (evcom_socket *socket);
 #define SECURE(s)           ((s)->flags & EVCOM_SECURE)
 #define GOT_HALF_CLOSE(s)   ((s)->flags & EVCOM_GOT_HALF_CLOSE)
 #define GOT_FULL_CLOSE(s)   ((s)->flags & EVCOM_GOT_FULL_CLOSE)
+#define TOO_MANY_CONN(s)    ((s)->flags & EVCOM_TOO_MANY_CONN)
+
+
+static void
+accept_new_connections (evcom_server *server)
+{
+  if (TOO_MANY_CONN(server)) {
+#if EV_MULTIPLICITY
+    evcom_server_attach(server->loop, server);
+#else 
+    evcom_server_attach(server);
+#endif 
+    server->flags &= ~EVCOM_TOO_MANY_CONN;
+  }
+}
+
+static void
+dont_accept_new_connections (evcom_server *server)
+{
+  evcom_server_detach(server);
+  server->flags |= EVCOM_TOO_MANY_CONN;
+}
 
 EV_INLINE int
 set_nonblock (int fd)
@@ -604,12 +626,17 @@ accept_connection (evcom_server *server)
   
   int fd = accept(server->fd, (struct sockaddr*)&address, &addr_len);
   if (fd < 0) {
-#ifdef EWOULDBLOCK
-    if (errno == EWOULDBLOCK) return NULL;
-#else
-    if (errno == EAGAIN) return NULL;
-#endif 
-    goto error;
+    switch (errno) {
+      case EMFILE:
+        dont_accept_new_connections(server);
+        return NULL;
+
+      case EAGAIN:
+        return NULL;
+
+      default:
+        goto error;
+    }
   }
 
   evcom_socket *socket = NULL;
@@ -838,6 +865,10 @@ on_io_event(EV_P_ ev_io *watcher, int revents)
     evcom_socket_detach(socket);
     assert(socket->fd == -1);
 
+    if (socket->server) {
+      accept_new_connections(socket->server);
+    }
+
     if (socket->on_close) socket->on_close(socket);
     /* WARNING: user can free socket in on_close so no more 
      * access beyond this point. */
@@ -919,7 +950,13 @@ void evcom_socket_force_close (evcom_socket *socket)
   socket->write_action = socket->read_action = NULL;
   // socket->errorno = EVCOM_SOCKET_ERROR_FORCE_CLOSE
   
-  if (socket->fd > 0) close(socket->fd);
+  if (socket->fd > 0) {
+    close(socket->fd);
+    if (socket->server) {
+      accept_new_connections(socket->server);
+    }
+  }
+
   socket->fd = -1;
 
   evcom_socket_detach(socket);
