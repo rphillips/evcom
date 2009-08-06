@@ -278,7 +278,7 @@ nosigpipe_push (gnutls_transport_ptr_t data, const void *buf, size_t len)
   int r = send(socket->fd, buf, len, flags);
 
   if (r == -1) {
-    gnutls_transport_set_errno(socket->session, errno); /* necessary ? */
+    socket->errorno = errno;
   }
 
   return r;
