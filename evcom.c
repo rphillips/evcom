@@ -35,6 +35,7 @@
 #include <netinet/tcp.h> /* TCP_NODELAY */
 #include <sys/types.h>
 #include <sys/socket.h> /* shutdown */
+#include <sys/un.h>
 
 #include <ev.h>
 #include <evcom.h>
@@ -695,14 +696,34 @@ on_connection (EV_P_ ev_io *watcher, int revents)
   }
 }
 
+static inline socklen_t
+address_length (struct sockaddr *address)
+{
+  struct sockaddr_un* unix_address = (struct sockaddr_un*)address;
+
+  switch (address->sa_family) {
+    case AF_INET:
+      return sizeof(struct sockaddr_in);
+
+    case AF_INET6:
+      return sizeof(struct sockaddr_in6);
+
+    case AF_UNIX:
+      return strlen(unix_address->sun_path) + sizeof(unix_address->sun_family);
+
+    default:
+      assert(0 && "Unsupported socket family");
+  }
+  return 0;
+}
+
 int
-evcom_server_listen (evcom_server *server, struct addrinfo *addrinfo, int backlog)
+evcom_server_listen (evcom_server *server, struct sockaddr *address, int backlog)
 {
   int fd = -1;
   assert(!LISTENING(server));
 
-  fd = socket(addrinfo->ai_family, addrinfo->ai_socktype,
-      addrinfo->ai_protocol);
+  fd = socket(address->sa_family, SOCK_STREAM, 0);
   if (fd < 0) {
     perror("stream()");
     return -1;
@@ -722,7 +743,7 @@ evcom_server_listen (evcom_server *server, struct addrinfo *addrinfo, int backlo
    */
   //setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *)&flags, sizeof(flags));
 
-  if (bind(fd, addrinfo->ai_addr, addrinfo->ai_addrlen) < 0) {
+  if (bind(fd, address, address_length(address)) < 0) {
     perror("bind()");
     close(fd);
     return -1;
@@ -1063,10 +1084,9 @@ evcom_stream_read_start (evcom_stream *stream)
 }
 
 int
-evcom_stream_connect (evcom_stream *s, struct addrinfo *addrinfo)
+evcom_stream_connect (evcom_stream *s, struct sockaddr *address)
 {
-  int fd = socket(addrinfo->ai_family, addrinfo->ai_socktype,
-      addrinfo->ai_protocol);
+  int fd = socket(address->sa_family, SOCK_STREAM, 0);
   if (fd < 0) {
     perror("socket()");
     return -1;
@@ -1083,7 +1103,7 @@ evcom_stream_connect (evcom_stream *s, struct addrinfo *addrinfo)
   setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &flags, sizeof(flags));
 #endif
 
-  r = connect(fd, addrinfo->ai_addr, addrinfo->ai_addrlen);
+  r = connect(fd, address, address_length(address));
 
   if (r < 0 && errno != EINPROGRESS) {
     perror("connect");

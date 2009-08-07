@@ -16,7 +16,7 @@
 
 #define HOST "127.0.0.1"
 #define SOCKFILE "/tmp/oi.sock"
-#define PORT "5000"
+#define PORT 5000
 
 static int nconnections; 
 
@@ -81,22 +81,17 @@ main (void)
   evcom_server_init(&server);
   server.on_connection = on_server_connection;
 
-  struct addrinfo *servinfo;
-  struct addrinfo hints;
-  memset(&hints, 0, sizeof hints);
-  hints.ai_family = AF_UNSPEC;
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_flags = AI_PASSIVE;
-  r = getaddrinfo(NULL, PORT, &hints, &servinfo);
-  assert(r == 0);
+  struct sockaddr_in address;
+  memset(&address, 0, sizeof(struct sockaddr_in));
+  address.sin_family = AF_INET;
+  address.sin_port = htons(PORT);
+  address.sin_addr.s_addr = INADDR_ANY;
 
-  r = evcom_server_listen(&server, servinfo, 10);
+  r = evcom_server_listen(&server, (struct sockaddr*)&address, 10);
   assert(r == 0);
   evcom_server_attach(EV_DEFAULT_ &server);
 
   ev_loop(EV_DEFAULT_ 0);
-
-  freeaddrinfo(servinfo);
 
   return 0;
 }

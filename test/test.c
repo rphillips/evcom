@@ -16,18 +16,10 @@
 # include <gnutls/gnutls.h>
 #endif
 
-static const struct addrinfo tcp_hints = 
-/* ai_flags      */ { .ai_flags = 0 
-/* ai_family     */ , .ai_family = AF_UNSPEC
-/* ai_socktype   */ , .ai_socktype = SOCK_STREAM
-                    , 0
-                    };
-
 #define MARK_PROGRESS write(STDERR_FILENO, ".", 1)
 
-#define HOST "127.0.0.1"
 #define SOCKFILE "/tmp/oi.sock"
-#define PORT "5000"
+#define PORT 5000
 
 static evcom_server server;
 static int nconnections; 
@@ -201,7 +193,7 @@ pingpong_on_client_read (evcom_stream *stream, const void *base, size_t len)
 }
 
 int
-pingpong (struct addrinfo *servinfo)
+pingpong (struct sockaddr *address)
 {
   int r;
   evcom_stream client;
@@ -217,7 +209,7 @@ pingpong (struct addrinfo *servinfo)
   server.on_connection = pingpong_on_server_connection;
   server.on_close = common_on_server_close;
 
-  r = evcom_server_listen(&server, servinfo, 10);
+  r = evcom_server_listen(&server, address, 10);
   assert(r == 0);
   evcom_server_attach(EV_DEFAULT_ &server);
 
@@ -231,7 +223,7 @@ pingpong (struct addrinfo *servinfo)
   if (use_tls) anon_tls_client(&client);
 #endif
 
-  r = evcom_stream_connect(&client, servinfo);
+  r = evcom_stream_connect(&client, address);
   assert(r == 0 && "problem connecting");
   evcom_stream_attach(EV_DEFAULT_ &client);
 
@@ -329,7 +321,7 @@ connint_on_client_read (evcom_stream *stream, const void *base, size_t len)
 }
 
 int 
-connint (struct addrinfo *servinfo)
+connint (struct sockaddr *address)
 {
   int r;
 
@@ -341,7 +333,7 @@ connint (struct addrinfo *servinfo)
   server.on_close = common_on_server_close;
 
 
-  evcom_server_listen(&server, servinfo, 1000);
+  evcom_server_listen(&server, address, 1000);
   evcom_server_attach(EV_DEFAULT_ &server);
 
   evcom_stream clients[NCONN];
@@ -356,7 +348,7 @@ connint (struct addrinfo *servinfo)
 #if EVCOM_HAVE_GNUTLS
     if (use_tls) anon_tls_client(client);
 #endif
-    r = evcom_stream_connect(client, servinfo);
+    r = evcom_stream_connect(client, address);
     assert(r == 0 && "problem connecting");
     evcom_stream_attach(EV_DEFAULT_ client);
   }
@@ -370,52 +362,26 @@ connint (struct addrinfo *servinfo)
 }
 
 
-struct addrinfo *
-create_tcp_address (void)
-{
-  struct addrinfo *servinfo;
-  int r = getaddrinfo(NULL, PORT, &tcp_hints, &servinfo);
-  assert(r == 0);
-  return servinfo;
-}
-
-void
-free_tcp_address (struct addrinfo *servinfo)
-{
-  freeaddrinfo(servinfo);
-}
-
-
-struct addrinfo *
+struct sockaddr *
 create_unix_address (void)
 {
-  struct addrinfo *servinfo;
   struct stat tstat;
   if (lstat(SOCKFILE, &tstat) == 0) {
     assert(S_ISSOCK(tstat.st_mode));
     unlink(SOCKFILE);
   }
 
-  servinfo = malloc(sizeof(struct addrinfo));
-  servinfo->ai_family = AF_UNIX;
-  servinfo->ai_socktype = SOCK_STREAM;
-  servinfo->ai_protocol = 0;
+  struct sockaddr_un *address = calloc(1, sizeof(struct sockaddr_un));
+  address->sun_family = AF_UNIX;
+  strcpy(address->sun_path, SOCKFILE);
 
-  struct sockaddr_un *sockaddr = calloc(sizeof(struct sockaddr_un), 1);
-  sockaddr->sun_family = AF_UNIX;
-  strcpy(sockaddr->sun_path, SOCKFILE);
-
-  servinfo->ai_addr = (struct sockaddr*)sockaddr;
-  servinfo->ai_addrlen = sizeof(struct sockaddr_un);
-
-  return servinfo;
+  return (struct sockaddr*)address;
 }
 
 void
-free_unix_address (struct addrinfo *servinfo)
+free_unix_address (struct sockaddr *address)
 {
-  free(servinfo->ai_addr);
-  free(servinfo);
+  free(address);
 }
 
 
@@ -434,20 +400,25 @@ main (void)
   gnutls_anon_set_server_dh_params (server_credentials, dh_params);
 #endif
 
-  struct addrinfo *tcp_address = create_tcp_address();
-  struct addrinfo *unix_address;
+  struct sockaddr_in tcp_address;
+  memset(&tcp_address, 0, sizeof(struct sockaddr_in));
+  tcp_address.sin_family = AF_INET;
+  tcp_address.sin_port = htons(PORT);
+  tcp_address.sin_addr.s_addr = INADDR_ANY;
 
   
   use_tls = 0;
-  assert(pingpong(tcp_address) == 0);
-  assert(connint(tcp_address) == 0);
+  assert(pingpong((struct sockaddr*)&tcp_address) == 0);
+  assert(connint((struct sockaddr*)&tcp_address) == 0);
 
 #if EVCOM_HAVE_GNUTLS
   use_tls = 1;
-  assert(pingpong(tcp_address) == 0);
-  assert(connint(tcp_address) == 0);
+  assert(pingpong((struct sockaddr*)&tcp_address) == 0);
+  assert(connint((struct sockaddr*)&tcp_address) == 0);
 #endif 
 
+
+  struct sockaddr *unix_address;
 
   
   use_tls = 0;
@@ -473,6 +444,5 @@ main (void)
 #endif 
 
 
-  free_tcp_address(tcp_address);
   return 0;
 }

@@ -57,13 +57,13 @@ typedef struct evcom_stream  evcom_stream;
 #define EVCOM_TOO_MANY_CONN     0x0040
 
 void evcom_server_init          (evcom_server *);
- int evcom_server_listen        (evcom_server *, struct addrinfo *addrinfo, int backlog);
+ int evcom_server_listen        (evcom_server *, struct sockaddr *address, int backlog);
 void evcom_server_attach        (EV_P_ evcom_server *);
 void evcom_server_detach        (evcom_server *);
 void evcom_server_close         (evcom_server *);  // synchronous
 
 void evcom_stream_init          (evcom_stream *, float timeout);
- int evcom_stream_connect       (evcom_stream *, struct addrinfo *addrinfo);
+ int evcom_stream_connect       (evcom_stream *, struct sockaddr *address);
 void evcom_stream_attach        (EV_P_ evcom_stream *);
 void evcom_stream_detach        (evcom_stream *);
 void evcom_stream_read_start    (evcom_stream *);
