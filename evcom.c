@@ -590,7 +590,7 @@ assign_file_descriptor (evcom_socket *socket, int fd)
     gnutls_transport_set_lowat(socket->session, 0); 
     gnutls_transport_set_push_function(socket->session, nosigpipe_push);
     gnutls_transport_set_ptr2(socket->session,
-        (gnutls_transport_ptr_t)fd, /* recv */
+        (gnutls_transport_ptr_t)(intptr_t)fd, /* recv */
         socket); /* send */   
     socket->read_action = secure_handshake;
     socket->write_action = secure_handshake;
