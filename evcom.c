@@ -71,6 +71,7 @@ static int secure_half_goodbye (evcom_stream *stream);
 #define GOT_HALF_CLOSE(s)   ((s)->flags & EVCOM_GOT_HALF_CLOSE)
 #define GOT_FULL_CLOSE(s)   ((s)->flags & EVCOM_GOT_FULL_CLOSE)
 #define TOO_MANY_CONN(s)    ((s)->flags & EVCOM_TOO_MANY_CONN)
+#define READ_PAUSED(s)      ((s)->flags & EVCOM_READ_PAUSED)
 
 
 static void
@@ -564,7 +565,7 @@ stream_recv (evcom_stream *stream)
   evcom_stream_reset_timeout(stream);
 
   if (recved == 0) {
-    evcom_stream_read_stop(stream);
+    evcom_stream_read_pause(stream);
     stream->read_action = NULL;
     if (stream->write_action == NULL) close_asap(stream);
   }
@@ -815,7 +816,10 @@ on_timeout (EV_P_ ev_timer *watcher, int revents)
   assert(revents == EV_TIMEOUT);
   assert(watcher == &stream->timeout_watcher);
 
-  // printf("on_timeout\n");
+  if (READ_PAUSED(stream)) {
+    evcom_stream_reset_timeout(stream);
+    return;
+  }
 
   if (stream->on_timeout) stream->on_timeout(stream);
   // timeout does not automatically kill your connection. you must!
@@ -1068,15 +1072,18 @@ evcom_stream_detach (evcom_stream *stream)
 }
 
 void
-evcom_stream_read_stop (evcom_stream *stream)
+evcom_stream_read_pause (evcom_stream *stream)
 {
   ev_io_stop(STREAM_LOOP_ &stream->read_watcher);
   ev_clear_pending(STREAM_LOOP_ &stream->read_watcher);
+  stream->flags |= EVCOM_READ_PAUSED;
 }
 
 void
-evcom_stream_read_start (evcom_stream *stream)
+evcom_stream_read_resume (evcom_stream *stream)
 {
+  stream->flags &= ~EVCOM_READ_PAUSED;
+
   if (stream->read_action) {
     ev_io_start(STREAM_LOOP_ &stream->read_watcher);
     /* XXX feed event? */

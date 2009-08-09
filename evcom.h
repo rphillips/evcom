@@ -55,6 +55,7 @@ typedef struct evcom_stream  evcom_stream;
 #define EVCOM_GOT_HALF_CLOSE    0x0010
 #define EVCOM_GOT_FULL_CLOSE    0x0020
 #define EVCOM_TOO_MANY_CONN     0x0040
+#define EVCOM_READ_PAUSED       0x0080
 
 void evcom_server_init          (evcom_server *);
  int evcom_server_listen        (evcom_server *, struct sockaddr *address, int backlog);
@@ -66,8 +67,8 @@ void evcom_stream_init          (evcom_stream *, float timeout);
  int evcom_stream_connect       (evcom_stream *, struct sockaddr *address);
 void evcom_stream_attach        (EV_P_ evcom_stream *);
 void evcom_stream_detach        (evcom_stream *);
-void evcom_stream_read_start    (evcom_stream *);
-void evcom_stream_read_stop     (evcom_stream *);
+void evcom_stream_read_resume   (evcom_stream *);
+void evcom_stream_read_pause    (evcom_stream *);
 
 /* Resets the timeout to stay alive for another stream->timeout seconds
  */
