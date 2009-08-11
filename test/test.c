@@ -27,10 +27,10 @@ static int use_tls;
 static int got_server_close;
 
 static void
-common_on_server_close (evcom_server *server, int errorno)
+common_on_server_close (evcom_server *server)
 {
   assert(server);
-  assert(errorno == 0);
+  assert(server->errorno == 0);
   got_server_close = 1;
 }
 

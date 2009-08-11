@@ -188,10 +188,10 @@ half_close (evcom_stream *stream)
   return OKAY;
 }
 
-// This is to be called when ever the out_stream is empty
+// This is to be called when ever the out is empty
 // and we need to change state.
 static void
-change_state_for_empty_out_stream (evcom_stream *stream)
+change_state_for_empty_out (evcom_stream *stream)
 {
   /*
    * a very complicated bunch of close logic!
@@ -239,10 +239,9 @@ change_state_for_empty_out_stream (evcom_stream *stream)
 static void
 update_write_buffer_after_send (evcom_stream *stream, ssize_t sent)
 {
-  evcom_queue *q = evcom_queue_last(&stream->out_stream);
+  evcom_queue *q = evcom_queue_last(&stream->out);
   evcom_buf *to_write = evcom_queue_data(q, evcom_buf, queue);
   to_write->written += sent;
-  stream->written += sent;
 
   if (to_write->written == to_write->len) {
 
@@ -252,8 +251,8 @@ update_write_buffer_after_send (evcom_stream *stream, ssize_t sent)
       to_write->release(to_write);
     }  
 
-    if (evcom_queue_empty(&stream->out_stream)) {
-      change_state_for_empty_out_stream(stream);
+    if (evcom_queue_empty(&stream->out)) {
+      change_state_for_empty_out(stream);
       if (stream->on_drain)
         stream->on_drain(stream);
     }
@@ -324,12 +323,12 @@ secure_stream_send (evcom_stream *stream)
 {
   ssize_t sent;
 
-  if (evcom_queue_empty(&stream->out_stream)) {
+  if (evcom_queue_empty(&stream->out)) {
     ev_io_stop(STREAM_LOOP_ &stream->write_watcher);
     return AGAIN;
   }
 
-  evcom_queue *q = evcom_queue_last(&stream->out_stream);
+  evcom_queue *q = evcom_queue_last(&stream->out);
   evcom_buf *to_write = evcom_queue_data(q, evcom_buf, queue);
 
   assert(SECURE(stream));
@@ -366,8 +365,8 @@ secure_stream_send (evcom_stream *stream)
 static int
 secure_stream_recv (evcom_stream *stream)
 {
-  char recv_buffer[stream->chunksize];
-  size_t recv_buffer_size = stream->chunksize;
+  char recv_buffer[EVCOM_CHUNKSIZE];
+  size_t recv_buffer_size = EVCOM_CHUNKSIZE;
   ssize_t recved;
 
   assert(SECURE(stream));
@@ -477,12 +476,12 @@ stream_send (evcom_stream *stream)
 
   assert(!SECURE(stream));
 
-  if (evcom_queue_empty(&stream->out_stream)) {
+  if (evcom_queue_empty(&stream->out)) {
     ev_io_stop(STREAM_LOOP_ &stream->write_watcher);
     return AGAIN;
   }
 
-  evcom_queue *q = evcom_queue_last(&stream->out_stream);
+  evcom_queue *q = evcom_queue_last(&stream->out);
   evcom_buf *to_write = evcom_queue_data(q, evcom_buf, queue);
   
   int flags = 0;
@@ -530,8 +529,8 @@ stream_send (evcom_stream *stream)
 static int
 stream_recv (evcom_stream *stream)
 {
-  char buf[stream->chunksize];
-  size_t buf_size = stream->chunksize;
+  char buf[EVCOM_CHUNKSIZE];
+  size_t buf_size = EVCOM_CHUNKSIZE;
   ssize_t recved;
 
   assert(!SECURE(stream));
@@ -608,10 +607,9 @@ server_close_with_error (evcom_server *server, int errorno)
     close(server->fd); /* TODO do this on the loop? check return value? */
     server->fd = -1;
     server->flags &= ~EVCOM_LISTENING;
+    server->errorno = errorno;
 
-    if (server->on_close) {
-      server->on_close(server, errorno);
-    }
+    if (server->on_close) server->on_close(server);
   }
 }
 
@@ -828,8 +826,8 @@ on_timeout (EV_P_ ev_timer *watcher, int revents)
 static void
 release_write_buffer(evcom_stream *stream)
 {
-  while (!evcom_queue_empty(&stream->out_stream)) {
-    evcom_queue *q = evcom_queue_last(&stream->out_stream);
+  while (!evcom_queue_empty(&stream->out)) {
+    evcom_queue *q = evcom_queue_last(&stream->out);
     evcom_buf *buf = evcom_queue_data(q, evcom_buf, queue);
     evcom_queue_remove(q);
     if (buf->release) buf->release(buf);
@@ -917,7 +915,7 @@ evcom_stream_init (evcom_stream *stream, float timeout)
 #endif
   stream->flags = 0;
 
-  evcom_queue_init(&stream->out_stream);
+  evcom_queue_init(&stream->out);
 
   ev_init(&stream->write_watcher, on_io_event);
   stream->write_watcher.data = stream;
@@ -938,8 +936,6 @@ evcom_stream_init (evcom_stream *stream, float timeout)
   stream->read_action = NULL;
   stream->write_action = NULL;
 
-  stream->chunksize = 8*1024; 
-
   stream->on_connect = NULL;
   stream->on_read = NULL;
   stream->on_drain = NULL;
@@ -950,8 +946,8 @@ void
 evcom_stream_close (evcom_stream *stream)
 {
   stream->flags |= EVCOM_GOT_HALF_CLOSE;
-  if (evcom_queue_empty(&stream->out_stream)) {
-    change_state_for_empty_out_stream(stream);
+  if (evcom_queue_empty(&stream->out)) {
+    change_state_for_empty_out(stream);
   }
 }
 
@@ -959,8 +955,8 @@ void
 evcom_stream_full_close (evcom_stream *stream)
 {
   stream->flags |= EVCOM_GOT_FULL_CLOSE;
-  if (evcom_queue_empty(&stream->out_stream)) {
-    change_state_for_empty_out_stream(stream);
+  if (evcom_queue_empty(&stream->out)) {
+    change_state_for_empty_out(stream);
   }
 }
 
@@ -999,7 +995,7 @@ evcom_stream_write (evcom_stream *stream, evcom_buf *buf)
     goto error;
   }
 
-  evcom_queue_insert_head(&stream->out_stream, &buf->queue);
+  evcom_queue_insert_head(&stream->out, &buf->queue);
   buf->written = 0;
 
   if (ATTACHED(stream)) {

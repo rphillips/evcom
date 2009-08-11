@@ -42,10 +42,10 @@ extern "C" {
 # include <gnutls/gnutls.h>
 #endif
 
-typedef struct evcom_queue   evcom_queue;
-typedef struct evcom_buf     evcom_buf;
-typedef struct evcom_server  evcom_server;
-typedef struct evcom_stream  evcom_stream;
+/* The maximum evcom_stream will try to read in one callback */
+#ifndef EVCOM_CHUNKSIZE
+# define EVCOM_CHUNKSIZE (8*1024)
+#endif
 
 /* flags for stream and server */
 #define EVCOM_ATTACHED          0x0001
@@ -56,6 +56,75 @@ typedef struct evcom_stream  evcom_stream;
 #define EVCOM_GOT_FULL_CLOSE    0x0020
 #define EVCOM_TOO_MANY_CONN     0x0040
 #define EVCOM_READ_PAUSED       0x0080
+
+typedef struct evcom_queue {
+  struct evcom_queue  *prev;
+  struct evcom_queue  *next;
+} evcom_queue;
+
+typedef struct evcom_buf {
+  /* public */
+  char *base;
+  size_t len;
+  void (*release) (struct evcom_buf *); /* called when oi is done with the object */
+  void *data;
+
+  /* private */
+  size_t written;
+  evcom_queue queue;
+} evcom_buf;
+
+#if EV_MULTIPLICITY
+# define EVCOM_LOOP struct ev_loop *loop;
+#else
+# define EVCOM_LOOP
+#endif
+
+#define EVCOM_COMMON(type)                            \
+  unsigned int flags;               /* private   */   \
+  int errorno;                      /* private   */   \
+  int fd;                           /* read-only */   \
+  EVCOM_LOOP                        /* read-only */   \
+  void *data;                       /* public    */   \
+  void (*on_close) (struct type*);  /* public    */   
+
+typedef struct evcom_server {
+  EVCOM_COMMON(evcom_server)
+
+  /* PRIVATE */
+  ev_io connection_watcher; 
+
+  /* PUBLIC */
+  struct evcom_stream*
+    (*on_connection)(struct evcom_server *, struct sockaddr *remote_addr);
+} evcom_server;
+
+typedef struct evcom_stream {
+  EVCOM_COMMON(evcom_stream)
+
+  /* PRIVATE */  
+  int (*read_action)  (struct evcom_stream *);
+  int (*write_action) (struct evcom_stream *);
+  ev_io write_watcher;
+  ev_io read_watcher;
+  ev_timer timeout_watcher;
+#if EVCOM_HAVE_GNUTLS
+  gnutls_session_t session;
+#endif
+
+  /* READ-ONLY */  
+  struct evcom_server *server;
+  evcom_queue out;
+#if EVCOM_HAVE_GNUTLS
+  int gnutls_errorno;
+#endif
+
+  /* PUBLIC */
+  void (*on_connect) (struct evcom_stream *);
+  void (*on_read)    (struct evcom_stream *, const void *buf, size_t count);
+  void (*on_drain)   (struct evcom_stream *);
+  void (*on_timeout) (struct evcom_stream *);
+} evcom_stream;
 
 void evcom_server_init          (evcom_server *);
  int evcom_server_listen        (evcom_server *, struct sockaddr *address, int backlog);
@@ -97,7 +166,7 @@ void evcom_stream_full_close    (evcom_stream *);
 /* The most extreme measure. 
  * Will not wait for the write queue to complete. 
  */
-void evcom_stream_force_close (evcom_stream *);
+void evcom_stream_force_close   (evcom_stream *);
 
 
 #if EVCOM_HAVE_GNUTLS
@@ -113,88 +182,6 @@ void evcom_stream_set_secure_session (evcom_stream *, gnutls_session_t);
 evcom_buf * evcom_buf_new     (const char* base, size_t len);
 evcom_buf * evcom_buf_new2    (size_t len);
 void        evcom_buf_destroy (evcom_buf *);
-
-
-struct evcom_queue {
-  evcom_queue  *prev;
-  evcom_queue  *next;
-};
-
-struct evcom_buf {
-  /* public */
-  char *base;
-  size_t len;
-  void (*release) (evcom_buf *); /* called when oi is done with the object */
-  void *data;
-
-  /* private */
-  size_t written;
-  evcom_queue queue;
-};
-
-struct evcom_server {
-  /* read only */
-  int fd;
-#if EV_MULTIPLICITY
-  struct ev_loop *loop;
-#endif
-  unsigned flags;
-
-  /* PRIVATE */
-  ev_io connection_watcher;
-
-  /* PUBLIC */
-
-  evcom_stream* (*on_connection) (evcom_server *, struct sockaddr *remote_addr);
-
-  /* Executed when a server is closed. 
-   * If evcom_server_close() was called errorno will be 0.
-   * An libev error is indicated with errorno == 1
-   * Otherwise errorno is a stdlib errno from a system call, e.g. accept()
-   */
-  void (*on_close) (evcom_server *, int errorno);
-
-  void *data;
-};
-
-struct evcom_stream {
-  /* read only */
-  int fd;
-#if EV_MULTIPLICITY
-  struct ev_loop *loop;
-#endif
-  evcom_server *server;
-  evcom_queue out_stream;
-  size_t written;
-  unsigned flags;
-
-  /* NULL = that end of the stream is closed. */
-  int (*read_action)  (evcom_stream *);
-  int (*write_action) (evcom_stream *);
-
-  /* ERROR CODES. 0 = no error. Check on_close. */
-  int errorno; 
-#if EVCOM_HAVE_GNUTLS
-  int gnutls_errorno;
-#endif
-
-  /* private */  
-  ev_io write_watcher;
-  ev_io read_watcher;
-  ev_timer timeout_watcher;
-#if EVCOM_HAVE_GNUTLS
-  gnutls_session_t session;
-#endif
-  
-  /* public */
-  size_t chunksize; /* the maximum chunk that on_read() will return */
-  void (*on_connect)   (evcom_stream *);
-  void (*on_read)      (evcom_stream *, const void *buf, size_t count);
-  void (*on_drain)     (evcom_stream *);
-  void (*on_close)     (evcom_stream *);
-  void (*on_timeout)   (evcom_stream *);
-  void *data;
-};
 
 EV_INLINE void
 evcom_queue_init (evcom_queue *q)
