@@ -54,8 +54,19 @@ extern "C" {
 #define EVCOM_SECURE            0x0008
 #define EVCOM_GOT_HALF_CLOSE    0x0010
 #define EVCOM_GOT_FULL_CLOSE    0x0020
-#define EVCOM_TOO_MANY_CONN     0x0040
-#define EVCOM_READ_PAUSED       0x0080
+#define EVCOM_PAUSED            0x0040
+#define EVCOM_READABLE          0x0080
+#define EVCOM_WRITABLE          0x0100
+#define EVCOM_GOT_WRITE_EVENT   0x0200
+
+enum evcom_stream_state { EVCOM_INITIALIZED
+                        , EVCOM_CONNECTING
+                        , EVCOM_CONNECTED_RW /* read write */
+                        , EVCOM_CONNECTED_RO /* read only  */
+                        , EVCOM_CONNECTED_WO /* write only */
+                        , EVCOM_CLOSING
+                        , EVCOM_CLOSED
+                        };
 
 typedef struct evcom_queue {
   struct evcom_queue  *prev;
@@ -75,24 +86,29 @@ typedef struct evcom_buf {
 } evcom_buf;
 
 #if EV_MULTIPLICITY
-# define EVCOM_LOOP struct ev_loop *loop;
+#  define EVCOM_LOOP struct ev_loop *loop;
 #else
-# define EVCOM_LOOP
+#  define EVCOM_LOOP
 #endif
 
-#define EVCOM_COMMON(type)                            \
-  unsigned int flags;               /* private   */   \
-  int errorno;                      /* private   */   \
-  int fd;                           /* read-only */   \
-  EVCOM_LOOP                        /* read-only */   \
-  void *data;                       /* public    */   \
-  void (*on_close) (struct type*);  /* public    */   
+#define EVCOM_DESCRIPTOR(type)                              \
+  unsigned int flags;                       /* private   */ \
+  int (*action) (struct evcom_descriptor*); /* private   */ \
+  int errorno;                              /* read-only */ \
+  int fd;                                   /* read-only */ \
+  EVCOM_LOOP                                /* read-only */ \
+  void *data;                               /* public    */ \
+  void (*on_close) (struct type*);          /* public    */   
+
+typedef struct evcom_descriptor {
+  EVCOM_DESCRIPTOR(evcom_descriptor)
+} evcom_descriptor;
 
 typedef struct evcom_server {
-  EVCOM_COMMON(evcom_server)
+  EVCOM_DESCRIPTOR(evcom_server)
 
   /* PRIVATE */
-  ev_io connection_watcher; 
+  ev_io watcher; 
 
   /* PUBLIC */
   struct evcom_stream*
@@ -100,11 +116,9 @@ typedef struct evcom_server {
 } evcom_server;
 
 typedef struct evcom_stream {
-  EVCOM_COMMON(evcom_stream)
+  EVCOM_DESCRIPTOR(evcom_stream)
 
   /* PRIVATE */  
-  int (*read_action)  (struct evcom_stream *);
-  int (*write_action) (struct evcom_stream *);
   ev_io write_watcher;
   ev_io read_watcher;
   ev_timer timeout_watcher;
@@ -178,6 +192,8 @@ void evcom_stream_force_close   (evcom_stream *);
  */
 void evcom_stream_set_secure_session (evcom_stream *, gnutls_session_t);
 #endif
+
+enum evcom_stream_state evcom_stream_state (evcom_stream *stream);
 
 evcom_buf * evcom_buf_new     (const char* base, size_t len);
 evcom_buf * evcom_buf_new2    (size_t len);
