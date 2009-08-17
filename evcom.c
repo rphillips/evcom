@@ -36,6 +36,7 @@
 #include <sys/types.h>
 #include <sys/socket.h> /* shutdown */
 #include <sys/un.h>
+#include <netinet/in.h> /* sockaddr_in, sockaddr_in6 */
 
 #include <ev.h>
 #include <evcom.h>
@@ -1236,14 +1237,6 @@ evcom_writer_set (evcom_writer* writer, int fd)
 {
   assert(fd >= 0);
   writer->fd = fd;
-
-#ifdef SO_NOSIGPIPE
-  int flags = 1;
-  int r = setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &flags, sizeof(flags));
-  if (r < 0) {
-    evcom_perror("setsockopt(SO_NOSIGPIPE)", errno);
-  }
-#endif
 
   ev_io_set(&writer->write_watcher, fd, EV_WRITE);
   writer->action = writer_send;

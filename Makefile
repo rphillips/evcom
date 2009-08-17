@@ -20,6 +20,7 @@ ifdef EVDIR
 	CFLAGS += -I$(EVDIR)/include
 	LDFLAGS += -L$(EVDIR)/lib
 endif
+
 LDFLAGS += -lev
 
 ifdef GNUTLSDIR
@@ -56,10 +57,10 @@ test: test/test test/echo test/timeout.rb
 	@test/timeout.rb
 
 test/test: test/test.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ test/test.c $(OUTPUT_A)
 
 test/echo: test/echo.c $(OUTPUT_A)
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ test/echo.c $(OUTPUT_A)
 
 clean:
 	rm -rf test/test test/echo
