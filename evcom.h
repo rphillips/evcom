@@ -213,9 +213,8 @@ void evcom_stream_set_secure_session (evcom_stream *, gnutls_session_t);
 
 enum evcom_stream_state evcom_stream_state (evcom_stream *stream);
 
-evcom_buf * evcom_buf_new     (const char* base, size_t len);
-evcom_buf * evcom_buf_new2    (size_t len);
-void        evcom_buf_destroy (evcom_buf *);
+evcom_buf* evcom_buf_new     (const char* base, size_t len);
+evcom_buf* evcom_buf_new2    (size_t len);
 
 EV_INLINE void
 evcom_queue_init (evcom_queue *q)

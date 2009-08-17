@@ -88,33 +88,26 @@ set_nonblock (int fd)
   return 0;
 }
 
-void
-evcom_buf_destroy (evcom_buf *buf)
-{
-  free(buf->base);
-  free(buf);
-}
-
 evcom_buf *
 evcom_buf_new2 (size_t len)
 {
-  evcom_buf *buf = malloc(sizeof(evcom_buf));
-  if (!buf) return NULL;
-  buf->base = malloc(len);
-  if (!buf->base) {
-    free(buf);
-    return NULL;
-  }
+  void *data = malloc(sizeof(evcom_buf) + len);
+  if (!data) return NULL;
+
+  evcom_buf *buf = data;
   buf->len = len;
-  buf->release = evcom_buf_destroy;
+  buf->release = (void (*)(evcom_buf*))free;
+  buf->base = data + sizeof(evcom_buf);
+
   return buf;
 }
 
 evcom_buf *
 evcom_buf_new (const char *base, size_t len)
 {
-  evcom_buf *buf = evcom_buf_new2(len);
+  evcom_buf* buf = evcom_buf_new2(len);
   if (!buf) return NULL;
+
   memcpy(buf->base, base, len);
 
   return buf;
