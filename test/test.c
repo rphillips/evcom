@@ -16,7 +16,10 @@
 # include <gnutls/gnutls.h>
 #endif
 
-#define MARK_PROGRESS write(STDERR_FILENO, ".", 1)
+#undef MAX
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
+#define MARK_PROGRESS(cur,max) \
+  if (cur % (MAX(max,50)/50) == 0) write(STDERR_FILENO, ".", 1)
 
 #define SOCKFILE "/tmp/oi.sock"
 #define PORT 5000
@@ -196,7 +199,7 @@ pingpong_on_client_read (evcom_stream *stream, const void *base, size_t len)
     return;
   }
 
-  if (successful_ping_count % (EXCHANGES/20) == 0) MARK_PROGRESS;
+  MARK_PROGRESS(successful_ping_count, EXCHANGES);
 
   evcom_stream_write_simple(stream, PING, sizeof PING);
 }
@@ -298,7 +301,7 @@ connint_on_client_close (evcom_stream *stream)
 
   printf("client connection closed\n");
 
-  if (nconnections % (NCONN/20) == 0) MARK_PROGRESS;
+  MARK_PROGRESS(nconnections, NCONN);
 
   if(++nconnections == NCONN) {
     evcom_server_close(&server);
@@ -394,7 +397,7 @@ reader_read (evcom_reader *r, const void *str, size_t len)
   }
 
   if (++reader_cnt < PIPE_CNT) {
-    if (reader_cnt % (PIPE_CNT/20) == 0) MARK_PROGRESS;
+    MARK_PROGRESS(reader_cnt, PIPE_CNT);
     evcom_writer_write(&writer, PIPE_MSG, strlen(PIPE_MSG));
   } else {
     evcom_writer_close(&writer); 
