@@ -10,7 +10,7 @@ GNUTLSDIR=/usr
 
 # CFLAGS and LDFLAGS are for the users to override from the command line.
 CFLAGS	= -g -I. -Wall -Werror -Wextra #-DNDEBUG=1
-LDFLAGS	= 
+LDFLAGS	=
 
 CC = gcc
 AR = ar
@@ -35,7 +35,7 @@ OBJ = ${SRC:.c=.o}
 NAME=libevcom
 OUTPUT_A=$(NAME).a
 
-all: $(OUTPUT_A) 
+all: $(OUTPUT_A)
 
 $(OUTPUT_A): $(OBJ)
 	$(AR) cru $(OUTPUT_A) $(OBJ)
@@ -65,4 +65,4 @@ clean:
 	rm -rf test/test test/echo
 	rm -f $(OUTPUT_A) *.o
 
-.PHONY: all clean test 
+.PHONY: all clean test
