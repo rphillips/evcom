@@ -131,7 +131,7 @@ pingpong_on_peer_read (evcom_stream *stream, const void *base, size_t len)
   buf[len] = 0;
   printf("server got message: %s\n", buf);
 
-  evcom_stream_write_simple(stream, PONG, sizeof PONG);
+  evcom_stream_write(stream, PONG, sizeof PONG);
 }
 
 static void
@@ -173,7 +173,7 @@ static void
 pingpong_on_client_connect (evcom_stream *stream)
 {
   printf("client connected. sending ping\n");
-  evcom_stream_write_simple(stream, PING, sizeof PING);
+  evcom_stream_write(stream, PING, sizeof PING);
   assert(EVCOM_CONNECTED_RW == evcom_stream_state(stream));
 }
 
@@ -201,7 +201,7 @@ pingpong_on_client_read (evcom_stream *stream, const void *base, size_t len)
 
   MARK_PROGRESS(successful_ping_count, EXCHANGES);
 
-  evcom_stream_write_simple(stream, PING, sizeof PING);
+  evcom_stream_write(stream, PING, sizeof PING);
 }
 
 int
@@ -261,7 +261,7 @@ send_bye_and_close(evcom_stream *stream, const void *base, size_t len)
 {
   assert(base);
   assert(len == 0);
-  evcom_stream_write_simple(stream, "BYE", 3);
+  evcom_stream_write(stream, "BYE", 3);
   printf("server wrote bye\n");
   evcom_stream_close(stream);
 }

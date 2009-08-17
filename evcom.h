@@ -179,8 +179,7 @@ void evcom_stream_read_resume   (evcom_stream *);
 void evcom_stream_read_pause    (evcom_stream *);
 /* Resets the timeout to stay alive for another stream->timeout seconds */
 void evcom_stream_reset_timeout (evcom_stream *);
-void evcom_stream_write         (evcom_stream *, evcom_buf *);
-void evcom_stream_write_simple  (evcom_stream *, const char *str, size_t len);
+void evcom_stream_write         (evcom_stream *, const char *str, size_t len);
 /* Once the write buffer is drained, evcom_stream_close will shutdown the
  * writing end of the stream and will close the read end once the server
  * replies with an EOF.

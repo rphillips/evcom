@@ -913,39 +913,75 @@ void evcom_stream_force_close (evcom_stream *stream)
 }
 
 void
-evcom_stream_write (evcom_stream *stream, evcom_buf *buf)
+evcom_stream_write (evcom_stream *stream, const char *str, size_t len)
 {
   if (!WRITABLE(stream) || GOT_FULL_CLOSE(stream) || GOT_HALF_CLOSE(stream)) {
     assert(0 && "Do not write to a closed stream");
-    if (buf->release) buf->release(buf);
     return;
   }
 
-  evcom_queue_insert_head(&stream->out, &buf->queue);
-  buf->written = 0;
+  ssize_t sent = 0;
+
+  if (evcom_queue_empty(&stream->out)) {
+#if EVCOM_HAVE_GNUTLS
+    if (SECURE(stream)) {
+      sent = gnutls_record_send(stream->session, str, len);
+
+      if (gnutls_error_is_fatal(sent)) {
+        stream->gnutls_errorno = sent;
+        goto close;
+      }
+    } else
+#endif // EVCOM_HAVE_GNUTLS
+    {
+      /* TODO use writev() here? */
+      sent = nosigpipe_send(stream->fd, str, len);
+    }
+
+    if (sent < 0) {
+      switch (errno) {
+        case ECONNRESET:
+        case EPIPE:
+          goto close;
+
+        case EINTR:
+        case EAGAIN:
+          sent = 0;
+          break;
+
+        default:
+          stream->errorno = errno;
+          evcom_perror("send()", stream->errorno);
+          goto close;
+      }
+    }
+  } /* TODO else { memcpy to last buffer on head } */
+
+  assert(sent >= 0);
+  if ((size_t)sent == len) return; /* sent the whole buffer */
+
+  len -= sent;
+  str += sent;
+
+  evcom_buf *b = evcom_buf_new(str, len);
+  evcom_queue_insert_head(&stream->out, &b->queue);
+  b->written = 0;
+
+  assert(stream->fd >= 0);
 
   if (ATTACHED(stream)) {
     ev_io_start(D_LOOP_(stream) &stream->write_watcher);
-    if (stream->action == recv_send) {
-      send_data(stream);
-    }
   }
+  return;
+
+close:
+  close_stream_asap(stream);
 }
 
 void
 evcom_stream_reset_timeout (evcom_stream *stream)
 {
   ev_timer_again(D_LOOP_(stream) &stream->timeout_watcher);
-}
-
-/* Writes a string to the stream.
- * NOTE: Allocates memory. Avoid for performance applications.
- */
-void
-evcom_stream_write_simple (evcom_stream *stream, const char *str, size_t len)
-{
-  evcom_buf *buf = evcom_buf_new(str, len);
-  evcom_stream_write(stream, buf);
 }
 
 void
