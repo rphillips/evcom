@@ -282,6 +282,9 @@ secure_handshake (evcom_descriptor *d)
 
   evcom_stream_reset_timeout(stream);
 
+  ev_io_start(D_LOOP_(stream) &stream->read_watcher);
+  ev_io_start(D_LOOP_(stream) &stream->write_watcher);
+
   return recv_send((evcom_descriptor*)stream);
 }
 
@@ -923,7 +926,7 @@ evcom_stream_write (evcom_stream *stream, const char *str, size_t len)
 
   ssize_t sent = 0;
 
-  if (evcom_queue_empty(&stream->out)) {
+  if (evcom_queue_empty(&stream->out) && stream->action == recv_send) {
 #if EVCOM_HAVE_GNUTLS
     if (SECURE(stream)) {
       sent = gnutls_record_send(stream->session, str, len);
@@ -1068,6 +1071,33 @@ evcom_stream_connect (evcom_stream *stream, struct sockaddr *address)
   assign_file_descriptor(stream, fd);
 
   return 0;
+}
+
+int evcom_stream_pair (evcom_stream *a, evcom_stream *b)
+{
+  int sv[2];
+  int old_errno;
+
+  int r = socketpair(PF_LOCAL, SOCK_STREAM, 0, sv);
+  if (r < 0) return -1;
+
+  r = set_nonblock(sv[0]);
+  if (r < 0) goto set_nonblock_error;
+  r = set_nonblock(sv[1]);
+  if (r < 0) goto set_nonblock_error;
+
+  assign_file_descriptor(a, sv[0]);
+  assign_file_descriptor(b, sv[1]);
+
+  return 0;
+
+set_nonblock_error:
+  old_errno = errno;
+  evcom_perror("set_nonblock()", errno);
+  close(sv[0]);
+  close(sv[1]);
+  errno = old_errno;
+  return -1;
 }
 
 enum evcom_stream_state

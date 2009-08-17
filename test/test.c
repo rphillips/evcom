@@ -460,6 +460,131 @@ pipe_stream (void)
   return 0;
 }
 
+#define PAIR_PINGPONG_TIMEOUT 5.0
+#define PAIR_PINGPONG_EXCHANGES 50
+static int a_got_close;
+static int a_got_connect;
+static int b_got_close;
+static int b_got_connect;
+static int pair_pingpong_cnt;
+static evcom_stream a, b;
+
+void a_connect (evcom_stream *stream)
+{
+  assert(stream == &a);
+  a_got_connect = 1;
+}
+
+void a_close (evcom_stream *stream)
+{
+  evcom_stream_detach(stream);
+  assert(stream == &a);
+  a_got_close = 1;
+
+  assert(stream->errorno == 0);
+#if EVCOM_HAVE_GNUTLS
+  // FIXME
+  //fprintf(stderr, "*** Error: %s\n", gnutls_strerror (stream->gnutls_errorno));
+  //assert(stream->gnutls_errorno == 0);
+  if (use_tls) gnutls_deinit(stream->session);
+#endif
+}
+
+void a_read (evcom_stream *stream, const void *buf, size_t len)
+{
+  assert(stream == &a);
+  if (len == 0) return;
+
+  assert(len == strlen(PONG));
+  assert(strncmp(buf, PONG, strlen(PONG)) == 0);
+
+  if (++pair_pingpong_cnt < PAIR_PINGPONG_EXCHANGES) {
+    evcom_stream_write(&a, PING, strlen(PING));
+  } else if (pair_pingpong_cnt == PAIR_PINGPONG_EXCHANGES) {
+    evcom_stream_close(stream);
+  }
+
+  MARK_PROGRESS(pair_pingpong_cnt, PAIR_PINGPONG_EXCHANGES);
+}
+
+void b_connect (evcom_stream *stream)
+{
+  assert(stream == &b);
+  b_got_connect = 1;
+}
+
+void b_close (evcom_stream *stream)
+{
+  evcom_stream_detach(stream);
+  assert(stream == &b);
+  b_got_close = 1;
+
+  assert(stream->errorno == 0);
+#if EVCOM_HAVE_GNUTLS
+  // FIXME
+  //assert(stream->gnutls_errorno == 0);
+  if (use_tls) gnutls_deinit(stream->session);
+#endif
+}
+
+void b_read (evcom_stream *stream, const void *buf, size_t len)
+{
+  assert(stream == &b);
+  if (len == 0) {
+    evcom_stream_close(stream);
+    return;
+  }
+
+  assert(len == strlen(PING));
+  assert(strncmp(buf, PING, strlen(PING)) == 0);
+
+  evcom_stream_write(&b, PONG, strlen(PONG));
+}
+
+int
+pair_pingpong ()
+{
+  a_got_close = 0;
+  a_got_connect = 0;
+  b_got_close = 0;
+  b_got_connect = 0;
+  pair_pingpong_cnt = 0;
+
+  evcom_stream_init(&a, PAIR_PINGPONG_TIMEOUT);
+  a.on_close = a_close;
+  a.on_connect = a_connect;
+  a.on_read = a_read;
+#if EVCOM_HAVE_GNUTLS
+  if (use_tls) anon_tls_client(&a);
+#endif
+
+  evcom_stream_init(&b, PAIR_PINGPONG_TIMEOUT);
+  b.on_close = b_close;
+  b.on_connect = b_connect;
+  b.on_read = b_read;
+#if EVCOM_HAVE_GNUTLS
+  if (use_tls) anon_tls_server(&b);
+#endif
+
+  int r = evcom_stream_pair(&a, &b);
+  assert(r == 0);
+
+  evcom_stream_attach(EV_DEFAULT_ &a);
+  evcom_stream_attach(EV_DEFAULT_ &b);
+
+  evcom_stream_write(&a, PING, strlen(PING));
+
+  ev_loop(EV_DEFAULT_ 0);
+
+  assert(a_got_close);
+  assert(a_got_connect);
+  assert(b_got_close);
+  assert(b_got_connect);
+  assert(pair_pingpong_cnt == PAIR_PINGPONG_EXCHANGES);
+
+  return 0;
+}
+
 struct sockaddr *
 create_unix_address (void)
 {
@@ -479,6 +604,11 @@ create_unix_address (void)
 void
 free_unix_address (struct sockaddr *address)
 {
+  struct stat tstat;
+  if (lstat(SOCKFILE, &tstat) == 0) {
+    assert(S_ISSOCK(tstat.st_mode));
+    unlink(SOCKFILE);
+  }
   free(address);
 }
 
@@ -498,9 +628,6 @@ main (void)
   gnutls_anon_set_server_dh_params (server_credentials, dh_params);
 #endif
 
-  fprintf(stderr, "pipe_stream: ");
-  assert(pipe_stream() == 0);
-  fprintf(stderr, "\n");
 
   struct sockaddr_in tcp_address;
   memset(&tcp_address, 0, sizeof(struct sockaddr_in));
@@ -509,6 +636,14 @@ main (void)
   tcp_address.sin_addr.s_addr = INADDR_ANY;
 
   use_tls = 0;
+
+  fprintf(stderr, "pipe_stream: ");
+  assert(pipe_stream() == 0);
+  fprintf(stderr, "\n");
+
+  fprintf(stderr, "pair_pingpong: ");
+  assert(pair_pingpong() == 0);
+  fprintf(stderr, "\n");
 
   fprintf(stderr, "pingpong tcp: ");
   assert(pingpong((struct sockaddr*)&tcp_address) == 0);
@@ -520,6 +655,10 @@ main (void)
 
 #if EVCOM_HAVE_GNUTLS
   use_tls = 1;
+
+  fprintf(stderr, "pair_pingpong ssl: ");
+  assert(pair_pingpong() == 0);
+  fprintf(stderr, "\n");
 
   fprintf(stderr, "pingpong ssl: ");
   assert(pingpong((struct sockaddr*)&tcp_address) == 0);
