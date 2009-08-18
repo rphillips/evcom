@@ -62,6 +62,12 @@ test/test: test/test.c $(OUTPUT_A)
 test/echo: test/echo.c $(OUTPUT_A)
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ test/echo.c $(OUTPUT_A)
 
+send_states.png: send_states.dot
+	dot -Tpng -o send_states.png send_states.dot
+
+recv_states.png: recv_states.dot
+	dot -Tpng -o recv_states.png recv_states.dot
+
 clean:
 	rm -rf test/test test/echo
 	rm -f $(OUTPUT_A) *.o

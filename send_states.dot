@@ -1,0 +1,64 @@
+strict digraph send_states {
+  start [peripheries=2];
+  end [peripheries=2];
+  connection_established;
+  handshake;
+  send;
+  shutdown;
+  gnutls_bye;
+  close_writefd;
+  close_both;
+
+  wait_for_connect;
+  wait_for_buf;
+  wait_for_eof;
+
+  node [label="", shape="box", height=0.1, width=0.1];
+  close;
+  drain;
+  hangup;
+  hangup_unsecure;
+
+
+
+  start -> wait_for_connect [label="duplex"];
+  start -> connection_established;   
+
+  wait_for_connect -> connection_established;
+  wait_for_connect -> close [label="error"];
+
+  connection_established -> handshake [label="tls"];
+  connection_established -> send;
+
+  handshake -> close [label="error"];
+  handshake -> send;
+
+  send -> close [label="error"];
+  send -> drain [label="drain"];
+
+  drain -> wait_for_buf -> send;
+  drain -> hangup [label="got_close"];
+
+  hangup -> gnutls_bye [label="tls"]; 
+  hangup -> hangup_unsecure;
+
+  gnutls_bye -> wait_for_eof;
+  gnutls_bye -> close [label="error"];
+
+  hangup_unsecure -> shutdown [label="duplex"];
+  hangup_unsecure -> close_writefd;
+
+  shutdown -> wait_for_eof;
+  shutdown -> close [label="error"];
+
+  wait_for_eof -> end [label="duplex"];
+  wait_for_eof -> close_writefd [label="!duplex"];
+  close_writefd -> wait_for_eof [label="readable"];
+
+  close -> close_both;
+  close -> close_writefd [label="duplex"];
+
+  close_both -> end;
+  close_writefd -> end;
+
+}
