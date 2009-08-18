@@ -465,6 +465,8 @@ shutdown_write (evcom_stream *stream)
 {
   int r;
 
+  assert(evcom_queue_empty(&stream->out));
+
 #if EVCOM_HAVE_GNUTLS
   if (SECURE(stream)) {
     r = gnutls_bye(stream->session, GNUTLS_SHUT_WR);
@@ -476,19 +478,25 @@ shutdown_write (evcom_stream *stream)
 
     if (r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN) {
       SET_DIRECTION(stream);
+      return AGAIN;
     }
-  }
+  } else
 #endif
+  {
+    r = shutdown(stream->fd, SHUT_WR);
 
-  r = shutdown(stream->fd, SHUT_WR);
-
-  if (r < 0) {
-    stream->errorno = errno;
-    evcom_perror("shutdown()", errno);
-    return close_stream_asap(stream);
+    if (r < 0) {
+      stream->errorno = errno;
+      evcom_perror("shutdown()", errno);
+      return close_stream_asap(stream);
+    }
   }
 
   stream->flags &= ~EVCOM_WRITABLE;
+
+  if (!READABLE(stream)) {
+    return close_stream_asap(stream);
+  }
 
   return OKAY;
 }
@@ -508,13 +516,7 @@ recv_send (evcom_descriptor *d)
 
   if (WRITABLE(stream)) {
     if (GOT_HALF_CLOSE(stream) && evcom_queue_empty(&stream->out)) {
-
-      if (READABLE(stream)) {
-        return shutdown_write(stream);
-      } else {
-        return close_stream_asap(stream);
-      }
-
+      return shutdown_write(stream);
     } else {
       return send_data(stream);
     }

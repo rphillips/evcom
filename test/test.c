@@ -483,9 +483,7 @@ void a_close (evcom_stream *stream)
 
   assert(stream->errorno == 0);
 #if EVCOM_HAVE_GNUTLS
-  // FIXME
-  //fprintf(stderr, "*** Error: %s\n", gnutls_strerror (stream->gnutls_errorno));
-  //assert(stream->gnutls_errorno == 0);
+  assert(stream->gnutls_errorno == 0);
   if (use_tls) gnutls_deinit(stream->session);
 #endif
 }
@@ -521,8 +519,7 @@ void b_close (evcom_stream *stream)
 
   assert(stream->errorno == 0);
 #if EVCOM_HAVE_GNUTLS
-  // FIXME
-  //assert(stream->gnutls_errorno == 0);
+  assert(stream->gnutls_errorno == 0);
   if (use_tls) gnutls_deinit(stream->session);
 #endif
 }
