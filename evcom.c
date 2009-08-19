@@ -1184,6 +1184,9 @@ evcom_stream_read_resume (evcom_stream *stream)
 {
   stream->flags &= ~EVCOM_PAUSED;
   evcom_stream_reset_timeout(stream);
+  if (stream->recv_action == stream_recv__wait_for_resume) {
+    stream->recv_action = stream_recv__data;
+  }
   if (ATTACHED(stream) && READABLE(stream)) {
     ev_io_start(D_LOOP_(stream) &stream->read_watcher);
   }
