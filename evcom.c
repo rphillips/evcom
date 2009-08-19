@@ -693,7 +693,7 @@ evcom_stream_assign_fds (evcom_stream *stream, int recvfd, int sendfd)
 #ifdef SO_NOSIGPIPE
   if (DUPLEX(stream)) {
     int flags = 1;
-    int r = setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &flags, sizeof(flags));
+    int r = setsockopt(sendfd, SOL_SOCKET, SO_NOSIGPIPE, &flags, sizeof(flags));
     if (r < 0) {
       evcom_perror("setsockopt(SO_NOSIGPIPE)", errno);
     }

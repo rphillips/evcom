@@ -218,8 +218,8 @@ pingpong (struct sockaddr *address)
   nconnections = 0;
   got_server_close = 0;
 
-  printf("sizeof(evcom_server): %d\n", sizeof(evcom_server));
-  printf("sizeof(evcom_stream): %d\n", sizeof(evcom_stream));
+  printf("sizeof(evcom_server): %d\n", (int)sizeof(evcom_server));
+  printf("sizeof(evcom_stream): %d\n", (int)sizeof(evcom_stream));
 
   evcom_server_init(&server);
   server.on_connection = pingpong_on_server_connection;
@@ -600,7 +600,7 @@ free_stream (evcom_stream *stream)
   free(stream);
 }
 
-#define ZERO_TIMEOUT 5.0
+#define ZERO_TIMEOUT 50.0
 static size_t zero_to_write = 0;
 static size_t zero_written = 0;
 static size_t zero_read = 0;
