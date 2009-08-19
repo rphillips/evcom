@@ -1076,9 +1076,10 @@ evcom_stream_write (evcom_stream *stream, const char *str, size_t len)
 
   ssize_t sent = 0;
 
-  if (stream->send_action == stream_send__wait_for_buf) 
+  if ( stream->send_action == stream_send__wait_for_buf
+    && evcom_queue_empty(&stream->out)
+     ) 
   {
-    assert(evcom_queue_empty(&stream->out));
     assert(CONNECTED(stream));
 #if EVCOM_HAVE_GNUTLS
     if (SECURE(stream)) {

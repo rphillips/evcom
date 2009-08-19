@@ -18,8 +18,12 @@
 
 #undef MAX
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
-#define MARK_PROGRESS(cur,max) \
-  if (cur % (MAX(max,50)/50) == 0) write(STDERR_FILENO, ".", 1)
+
+#undef MIN
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+
+#define MARK_PROGRESS(c,cur,max) \
+  if (cur % (MAX(max,50)/50) == 0) write(STDERR_FILENO, c, 1)
 
 #define SOCKFILE "/tmp/oi.sock"
 #define PORT 5000
@@ -199,7 +203,7 @@ pingpong_on_client_read (evcom_stream *stream, const void *base, size_t len)
     return;
   }
 
-  MARK_PROGRESS(successful_ping_count, EXCHANGES);
+  MARK_PROGRESS(".", successful_ping_count, EXCHANGES);
 
   evcom_stream_write(stream, PING, sizeof PING);
 }
@@ -301,7 +305,7 @@ connint_on_client_close (evcom_stream *stream)
 
   printf("client connection closed\n");
 
-  MARK_PROGRESS(nconnections, NCONN);
+  MARK_PROGRESS(".", nconnections, NCONN);
 
   if(++nconnections == NCONN) {
     evcom_server_close(&server);
@@ -397,10 +401,10 @@ reader_read (evcom_reader *r, const void *str, size_t len)
   }
 
   if (++reader_cnt < PIPE_CNT) {
-    MARK_PROGRESS(reader_cnt, PIPE_CNT);
+    MARK_PROGRESS(".", reader_cnt, PIPE_CNT);
     evcom_writer_write(&writer, PIPE_MSG, strlen(PIPE_MSG));
   } else {
-    evcom_writer_close(&writer); 
+    evcom_writer_close(&writer);
   }
 }
 
@@ -505,7 +509,7 @@ void a_read (evcom_stream *stream, const void *buf, size_t len)
     evcom_stream_close(stream);
   }
 
-  MARK_PROGRESS(pair_pingpong_cnt, PAIR_PINGPONG_EXCHANGES);
+  MARK_PROGRESS(".", pair_pingpong_cnt, PAIR_PINGPONG_EXCHANGES);
 }
 
 void b_connect (evcom_stream *stream)
@@ -588,6 +592,147 @@ pair_pingpong ()
   return 0;
 }
 
+
+static void
+free_stream (evcom_stream *stream)
+{
+  assert(stream->errorno == 0);
+  free(stream);
+}
+
+#define ZERO_TIMEOUT 5.0
+static size_t zero_to_write = 0;
+static size_t zero_written = 0;
+static size_t zero_read = 0;
+static size_t zero_client_closed = 0;
+
+static void
+error_out (evcom_stream *stream)
+{
+  assert(stream);
+  fprintf(stderr, "peer connection timeout\n");
+  assert(0);
+}
+
+static void
+echo (evcom_stream *stream, const void *base, size_t len)
+{
+  if(len == 0) {
+    fprintf(stderr, "close");
+    evcom_stream_close(stream);
+  } else {
+    evcom_stream_write(stream, base, len);
+  }
+}
+
+static evcom_stream*
+make_echo_connection (evcom_server *server, struct sockaddr *addr)
+{
+  assert(server);
+  assert(addr);
+
+  evcom_stream *stream = malloc(sizeof(evcom_stream));
+  evcom_stream_init(stream, ZERO_TIMEOUT);
+  stream->on_read = echo;
+  stream->on_close = free_stream;
+  stream->on_timeout = error_out;
+
+#if EVCOM_HAVE_GNUTLS
+  if (use_tls) anon_tls_server(stream);
+#endif
+
+  return stream;
+}
+
+
+static void
+zero_start (evcom_stream *stream)
+{
+  evcom_stream_write(stream, "0", 1);
+  zero_written++;
+}
+
+static void
+zero_close (evcom_stream *stream)
+{
+  assert(stream);
+  zero_client_closed = 1;
+}
+
+static void
+zero_recv (evcom_stream *stream, const void *buf, size_t len)
+{
+  MARK_PROGRESS("-", zero_read, zero_to_write);
+  zero_read += len;
+
+  size_t i;
+
+  for (i = 0; i < len; i++) {
+    assert(((char*)buf)[i] == '0');
+  }
+
+  for (i = 0; i < MIN(zero_to_write - zero_written, 90000); i++) {
+    evcom_stream_write(stream, "0", 1);
+    zero_written++;
+
+    MARK_PROGRESS(".", zero_written, zero_to_write);
+
+    if (zero_written == zero_to_write) {
+
+      fprintf(stderr, "CLOSE");
+      evcom_stream_close(stream);
+    }
+  }
+
+  if (len == 0) {
+    fprintf(stderr, "finish");
+    evcom_server_close(&server);
+  }
+}
+
+int
+zero_stream (struct sockaddr *address, size_t to_write)
+{
+  int r;
+
+  assert(to_write >= 1024); // should be kind of big at least.
+  zero_to_write = to_write;
+  got_server_close = 0;
+  zero_written = 0;
+  zero_read = 0;
+  zero_client_closed = 0;
+
+  evcom_server_init(&server);
+  server.on_connection = make_echo_connection;
+  server.on_close      = common_on_server_close;
+
+  evcom_server_listen(&server, address, 1000);
+  evcom_server_attach(EV_DEFAULT_ &server);
+
+  evcom_stream client;
+  evcom_stream_init(&client, ZERO_TIMEOUT);
+  client.on_read    = zero_recv;
+  client.on_connect = zero_start;
+  client.on_close   = zero_close;
+  client.on_timeout = error_out;
+#if EVCOM_HAVE_GNUTLS
+  if (use_tls) anon_tls_client(&client);
+#endif
+  r = evcom_stream_connect(&client, address);
+  assert(r == 0 && "problem connecting");
+  evcom_stream_attach(EV_DEFAULT_ &client);
+
+  ev_loop(EV_DEFAULT_ 0);
+
+  assert(got_server_close);
+  assert(zero_written == zero_to_write);
+  assert(zero_read == zero_to_write);
+  assert(zero_client_closed) ;
+
+  return 0;
+}
+
+
 struct sockaddr *
 create_unix_address (void)
 {
@@ -640,6 +785,10 @@ main (void)
 
   use_tls = 0;
 
+  fprintf(stderr, "zero_stream tcp: ");
+  assert(zero_stream((struct sockaddr*)&tcp_address, 5*1024*1024) == 0);
+  fprintf(stderr, "\n");
+
   fprintf(stderr, "pipe_stream: ");
   assert(pipe_stream() == 0);
   fprintf(stderr, "\n");
@@ -658,6 +807,10 @@ main (void)
 
 #if EVCOM_HAVE_GNUTLS
   use_tls = 1;
+
+  fprintf(stderr, "zero_stream ssl: ");
+  assert(zero_stream((struct sockaddr*)&tcp_address, 50*1024) == 0);
+  fprintf(stderr, "\n");
 
   fprintf(stderr, "pair_pingpong ssl: ");
   assert(pair_pingpong() == 0);
