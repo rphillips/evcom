@@ -52,12 +52,11 @@ extern "C" {
 #define EVCOM_LISTENING         0x0002
 #define EVCOM_CONNECTED         0x0004
 #define EVCOM_SECURE            0x0008
-#define EVCOM_GOT_HALF_CLOSE    0x0010
-#define EVCOM_GOT_FULL_CLOSE    0x0020
+#define EVCOM_DUPLEX            0x0010
+#define EVCOM_GOT_CLOSE         0x0020
 #define EVCOM_PAUSED            0x0040
 #define EVCOM_READABLE          0x0080
 #define EVCOM_WRITABLE          0x0100
-#define EVCOM_GOT_WRITE_EVENT   0x0200
 
 enum evcom_stream_state { EVCOM_INITIALIZED
                         , EVCOM_CONNECTING
@@ -118,18 +117,23 @@ typedef struct evcom_writer {
 } evcom_writer;
 
 typedef struct evcom_stream {
-  EVCOM_DESCRIPTOR(evcom_stream)
-
   /* PRIVATE */
+  EVCOM_LOOP
+  int errorno;
+  unsigned int flags;
   evcom_queue out;
   ev_io read_watcher;
   ev_io write_watcher;
+  int (*send_action) (struct evcom_stream*);
+  int (*recv_action) (struct evcom_stream*);
   ev_timer timeout_watcher;
 #if EVCOM_HAVE_GNUTLS
   gnutls_session_t session;
 #endif
 
   /* READ-ONLY */
+  int recvfd;
+  int sendfd;
   struct evcom_server *server;
 #if EVCOM_HAVE_GNUTLS
   int gnutls_errorno;
@@ -139,6 +143,8 @@ typedef struct evcom_stream {
   void (*on_connect) (struct evcom_stream *);
   void (*on_timeout) (struct evcom_stream *);
   void (*on_read)    (struct evcom_stream *, const void* buf, size_t len);
+  void (*on_close)   (struct evcom_stream *);
+  void *data;
 } evcom_stream;
 
 typedef struct evcom_server {
@@ -189,17 +195,7 @@ void evcom_stream_write         (evcom_stream *, const char *str, size_t len);
  */
 void evcom_stream_close         (evcom_stream *);
 
-/* Do not wait for the server to reply with EOF.  This will only be called
- * once the write buffer is drained.
- * Warning: For TCP stream, the OS kernel may (should) reply with RST
- * packets if this is called when data is still being received from the
- * server.
- */
-void evcom_stream_full_close    (evcom_stream *);
-
-/* The most extreme measure.
- * Will not wait for the write queue to complete.
- */
+/* Will not wait for the write queue to complete. Closes both directions */
 void evcom_stream_force_close   (evcom_stream *);
 
 

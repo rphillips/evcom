@@ -3,10 +3,10 @@ strict digraph send_states {
   end [peripheries=2];
   connection_established;
   handshake;
-  send;
+  send_data;
   shutdown;
   gnutls_bye;
-  close_writefd;
+  close_one;
   close_both;
 
   wait_for_connect;
@@ -28,16 +28,19 @@ strict digraph send_states {
   wait_for_connect -> close [label="error"];
 
   connection_established -> handshake [label="tls"];
-  connection_established -> send;
+  connection_established -> send_data;
 
   handshake -> close [label="error"];
-  handshake -> send;
+  handshake -> send_data;
 
-  send -> close [label="error"];
-  send -> drain [label="drain"];
+  send_data -> close [label="error"];
+  send_data -> drain [label="drain"];
 
-  drain -> wait_for_buf -> send;
+  drain -> wait_for_buf;
   drain -> hangup [label="got_close"];
+
+  wait_for_buf -> send_data;
+  wait_for_buf -> drain [label="empty_buf"];
 
   hangup -> gnutls_bye [label="tls"]; 
   hangup -> hangup_unsecure;
@@ -46,19 +49,17 @@ strict digraph send_states {
   gnutls_bye -> close [label="error"];
 
   hangup_unsecure -> shutdown [label="duplex"];
-  hangup_unsecure -> close_writefd;
+  hangup_unsecure -> close_one;
 
   shutdown -> wait_for_eof;
   shutdown -> close [label="error"];
 
-  wait_for_eof -> end [label="duplex"];
-  wait_for_eof -> close_writefd [label="!duplex"];
-  close_writefd -> wait_for_eof [label="readable"];
+  wait_for_eof -> close_one;
+  close_one -> wait_for_eof [label="readable"];
 
   close -> close_both;
-  close -> close_writefd [label="duplex"];
+  close -> close_one [label="duplex"];
 
   close_both -> end;
-  close_writefd -> end;
-
+  close_one -> end;
 }

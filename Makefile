@@ -36,7 +36,7 @@ OBJ = ${SRC:.c=.o}
 NAME=libevcom
 OUTPUT_A=$(NAME).a
 
-all: $(OUTPUT_A)
+all: $(OUTPUT_A) test/test test/echo
 
 $(OUTPUT_A): $(OBJ)
 	$(AR) cru $(OUTPUT_A) $(OBJ)

@@ -460,7 +460,7 @@ pipe_stream (void)
   return 0;
 }
 
-#define PAIR_PINGPONG_TIMEOUT 5.0
+#define PAIR_PINGPONG_TIMEOUT 5000.0
 #define PAIR_PINGPONG_EXCHANGES 50
 static int a_got_close;
 static int a_got_connect;
@@ -483,6 +483,9 @@ void a_close (evcom_stream *stream)
 
   assert(stream->errorno == 0);
 #if EVCOM_HAVE_GNUTLS
+  if (stream->gnutls_errorno) {
+    fprintf(stderr, "\nGNUTLS ERROR: %s\n", gnutls_strerror(stream->gnutls_errorno));
+  }
   assert(stream->gnutls_errorno == 0);
   if (use_tls) gnutls_deinit(stream->session);
 #endif
@@ -519,6 +522,9 @@ void b_close (evcom_stream *stream)
 
   assert(stream->errorno == 0);
 #if EVCOM_HAVE_GNUTLS
+  if (stream->gnutls_errorno) {
+    fprintf(stderr, "\nGNUTLS ERROR: %s\n", gnutls_strerror(stream->gnutls_errorno));
+  }
   assert(stream->gnutls_errorno == 0);
   if (use_tls) gnutls_deinit(stream->session);
 #endif
