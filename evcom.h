@@ -57,6 +57,7 @@ extern "C" {
 #define EVCOM_PAUSED            0x0040
 #define EVCOM_READABLE          0x0080
 #define EVCOM_WRITABLE          0x0100
+#define EVCOM_TOO_MANY_CONN     0x0200
 
 enum evcom_stream_state { EVCOM_INITIALIZED
                         , EVCOM_CONNECTING

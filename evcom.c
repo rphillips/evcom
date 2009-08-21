@@ -758,6 +758,7 @@ accept_connection (evcom_server *server)
       case EMFILE:
       case ENFILE:
         too_many_connections = 1;
+        server->flags |= EVCOM_TOO_MANY_CONN;
         evcom_server_detach(server);
         return NULL;
 
@@ -1013,10 +1014,11 @@ stream_event (EV_P_ ev_io *w, int revents)
   if (stream->sendfd < 0 && stream->recvfd < 0) {
     ev_timer_stop(EV_A_ &stream->timeout_watcher);
 
-    if (stream->server) {
+    if (stream->server && (stream->server->flags & EVCOM_TOO_MANY_CONN)) {
 #if EV_MULTIPLICITY
       struct ev_loop *loop = stream->server->loop;
 #endif
+      stream->server->flags &= ~EVCOM_TOO_MANY_CONN;
       evcom_server_attach(EV_A_ stream->server);
     }
     too_many_connections = 0;
