@@ -181,6 +181,7 @@ void evcom_stream_init          (evcom_stream *, float timeout);
 
  int evcom_stream_pair          (evcom_stream *a, evcom_stream *b);
  int evcom_stream_connect       (evcom_stream *, struct sockaddr *address);
+void evcom_stream_assign_fds    (evcom_stream *, int recvfd, int sendfd);
 
 void evcom_stream_attach        (EV_P_ evcom_stream *);
 void evcom_stream_detach        (evcom_stream *);
