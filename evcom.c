@@ -392,7 +392,7 @@ stream__handshake (evcom_stream *stream)
     return OKAY;
   }
 
-  evcom_stream_reset_timeout(stream);
+  ev_timer_again(D_LOOP_(stream) &stream->timeout_watcher);
 
   if (r == GNUTLS_E_INTERRUPTED || r == GNUTLS_E_AGAIN) {
     if (0 == gnutls_record_get_direction((stream)->session)) {
@@ -544,7 +544,7 @@ stream_recv__data (evcom_stream *stream)
       return OKAY;
     }
 
-    evcom_stream_reset_timeout(stream);
+    ev_timer_again(D_LOOP_(stream) &stream->timeout_watcher);
 
     assert(recved >= 0);
 
@@ -617,7 +617,7 @@ stream_send__data (evcom_stream *stream)
       return OKAY;
     }
 
-    evcom_stream_reset_timeout(stream);
+    ev_timer_again(D_LOOP_(stream) &stream->timeout_watcher);
 
     assert(sent >= 0);
 
@@ -998,13 +998,15 @@ on_timeout (EV_P_ ev_timer *watcher, int revents)
   assert(watcher == &stream->timeout_watcher);
 
   if (PAUSED(stream)) {
-    evcom_stream_reset_timeout(stream);
+    ev_timer_again(D_LOOP_(stream) &stream->timeout_watcher);
     return;
   }
 
   if (stream->on_timeout) stream->on_timeout(stream);
 
   evcom_stream_force_close(stream);
+
+  if (stream->on_close) stream->on_close(stream);
 }
 
 static void 
@@ -1058,7 +1060,7 @@ stream_event (EV_P_ ev_io *w, int revents)
  *   gnutls_db_set_ptr (stream->session, _);
  */
 void
-evcom_stream_init (evcom_stream *stream, float timeout)
+evcom_stream_init (evcom_stream *stream)
 {
   stream->flags = 0;
   stream->errorno = 0;
@@ -1082,7 +1084,7 @@ evcom_stream_init (evcom_stream *stream, float timeout)
   stream->gnutls_errorno = 0;
   stream->session = NULL;
 #endif
-  ev_timer_init(&stream->timeout_watcher, on_timeout, 0., timeout);
+  ev_timer_init(&stream->timeout_watcher, on_timeout, 0., 60.);
   stream->timeout_watcher.data = stream;
 
   stream->on_connect = NULL;
@@ -1188,9 +1190,12 @@ close:
 }
 
 void
-evcom_stream_reset_timeout (evcom_stream *stream)
+evcom_stream_reset_timeout (evcom_stream *stream, float timeout)
 {
-  ev_timer_again(D_LOOP_(stream) &stream->timeout_watcher);
+  stream->timeout_watcher.repeat = timeout;
+  if (ATTACHED(stream)) {
+    ev_timer_again(D_LOOP_(stream) &stream->timeout_watcher);
+  }
 }
 
 void
@@ -1224,6 +1229,7 @@ void
 evcom_stream_read_pause (evcom_stream *stream)
 {
   stream->flags |= EVCOM_PAUSED;
+  ev_timer_stop(D_LOOP_(stream) &stream->timeout_watcher);
   if (stream->recv_action == stream_recv__data) {
     ev_io_stop(D_LOOP_(stream) &stream->read_watcher);
     stream->recv_action = stream_recv__wait_for_resume;
@@ -1234,12 +1240,13 @@ void
 evcom_stream_read_resume (evcom_stream *stream)
 {
   stream->flags &= ~EVCOM_PAUSED;
-  evcom_stream_reset_timeout(stream);
+  ev_timer_again(D_LOOP_(stream) &stream->timeout_watcher);
   if (stream->recv_action == stream_recv__wait_for_resume) {
     stream->recv_action = stream_recv__data;
   }
-  if (ATTACHED(stream) && READABLE(stream)) {
-    ev_io_start(D_LOOP_(stream) &stream->read_watcher);
+  if (ATTACHED(stream)) {
+    ev_timer_again(D_LOOP_(stream) &stream->timeout_watcher);
+    if (READABLE(stream)) ev_io_start(D_LOOP_(stream) &stream->read_watcher);
   }
 }
 
