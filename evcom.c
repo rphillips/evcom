@@ -641,14 +641,24 @@ stream_send__shutdown (evcom_stream *stream)
   int r = shutdown(stream->sendfd, SHUT_WR);
 
   if (r < 0) {
-    stream->errorno = errno;
-    evcom_perror("shutdown()", errno);
+    switch (errno) {
+      case EINTR:
+        assert(stream->send_action == stream_send__shutdown);
+        return OKAY;
+
+      case ENOTCONN:
+        break;
+
+      default: 
+        stream->errorno = errno;
+        evcom_perror("shutdown()", errno);
+        break;
+    }
     stream->send_action = stream_send__close;
     return OKAY;
   }
 
   stream->flags &= ~EVCOM_WRITABLE;
-
   stream->send_action = stream_send__wait_for_eof;
   return OKAY;
 }
