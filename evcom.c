@@ -411,11 +411,14 @@ stream__handshake (evcom_stream *stream)
   stream->flags |= EVCOM_CONNECTED;
   if (stream->on_connect) stream->on_connect(stream);
 
-  ev_io_start(D_LOOP_(stream) &stream->read_watcher);
-  ev_io_start(D_LOOP_(stream) &stream->write_watcher);
+  /* evcom_stream_force_close might have been called. */
+  if (stream->recvfd >= 0 && stream->sendfd >= 0) {
+    ev_io_start(D_LOOP_(stream) &stream->read_watcher);
+    ev_io_start(D_LOOP_(stream) &stream->write_watcher);
 
-  stream->send_action = stream_send__data;
-  stream->recv_action = stream_recv__data;
+    stream->send_action = stream_send__data;
+    stream->recv_action = stream_recv__data;
+  }
 
   return OKAY;
 }
