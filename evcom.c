@@ -1117,8 +1117,8 @@ void evcom_stream_force_close (evcom_stream *stream)
 
   if (!DUPLEX(stream) && stream->sendfd >= 0) {
     close(stream->sendfd);
-    stream__set_send_closed(stream);
   }
+  stream__set_send_closed(stream);
 
   evcom_stream_detach(stream);
 }
